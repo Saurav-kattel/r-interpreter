@@ -3,7 +3,7 @@
 
 #include "parser.h"
 #include "symbol.h"
-double EvalAst(AstNode *);
+Result *EvalAst(AstNode *);
 void freeAst(AstNode *);
 AstNode *parseAst(Parser *p);
 #endif // INTERPRETER_H_

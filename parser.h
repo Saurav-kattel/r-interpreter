@@ -12,6 +12,11 @@ enum {
   NODE_UNARY_OP,
 };
 
+typedef struct Result {
+  int NodeType;
+  void *result;
+} Result;
+
 typedef struct {
   Token *current;
   Lexer *lex;
@@ -37,6 +42,7 @@ typedef struct AstNode {
       char *name;
       char *type;
       char *value;
+      SymbolTable *table;
     } identifier;
 
     struct {
@@ -45,6 +51,7 @@ typedef struct AstNode {
   };
 } AstNode;
 
+// NECESSARY
 AstNode *expr(Parser *);
 AstNode *term(Parser *);
 AstNode *factor(Parser *);
@@ -52,12 +59,13 @@ AstNode *unary(Parser *);
 AstNode *relational(Parser *);
 AstNode *logical(Parser *p);
 AstNode *string(Parser *p);
-double EvalAst(AstNode *);
-AstNode *parseProgram(Parser *p, SymbolTable *table);
-AstNode *parseStatement(Parser *p, SymbolTable *table);
+AstNode *varDecleration(Parser *p);
+
 Parser *InitParser(Lexer *, SymbolTable *);
 void freeAst(AstNode *);
 void consume(TokenType, Parser *);
 
-AstNode *varDecleration(Parser *p);
+// MIGHT BE NEEDED
+AstNode *parseProgram(Parser *p, SymbolTable *table);
+AstNode *parseStatement(Parser *p, SymbolTable *table);
 #endif // PRASER_H

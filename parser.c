@@ -1,5 +1,6 @@
 
 #include "parser.h"
+#include "interpreter.h"
 #include "lexer.h"
 #include "symbol.h"
 
@@ -82,6 +83,7 @@ AstNode *newIdentifierNode(char *type, char *name, char *value,
   node->identifier.value = strdup(value);
   node->identifier.type = strdup(type);
   node->identifier.name = strdup(name);
+  node->identifier.table = table;
 
   return node;
 }
@@ -149,6 +151,7 @@ AstNode *string(Parser *p) {
     printf("token is NULL\n");
     exit(EXIT_FAILURE);
   }
+
   if (p->current->type == TOKEN_STRING) {
     Token *tkn = p->current;
     consume(TOKEN_STRING, p);
@@ -177,10 +180,8 @@ AstNode *term(Parser *p) {
 }
 
 AstNode *expr(Parser *p) {
-  // Start by parsing the term
   AstNode *node = term(p);
 
-  // Continue as long as the current token is '+' or '-'
   while (p->current &&
          (p->current->type == TOKEN_PLUS || p->current->type == TOKEN_MINUS)) {
     Token *tkn = p->current;
@@ -410,19 +411,12 @@ AstNode *varDecleration(Parser *p) {
   consume(TOKEN_IDEN, p);
 
   consume(TOKEN_ASSIGN, p);
-  printf("current token %s\n", tokenNames[p->current->type]);
-
-  // Debugging info
-  printf("\n\nDebug: Current token type: %s, value: %s\n\n",
-         tokenNames[p->current->type], p->current->value);
-
   if (p->current->type == TOKEN_NUMBER) {
 
     AstNode *valueNode = logical(p);
-    // consume(TOKEN_SEMI_COLON, p);
-    double res = EvalAst(valueNode);
+    Result *res = EvalAst(valueNode);
     char buffer[1024];
-    sprintf(buffer, "%lf", res);
+    sprintf(buffer, "%lf", *(double *)res->result);
 
     AstNode *identifierNode =
         newIdentifierNode("number", varName, buffer, p->table);
@@ -448,10 +442,14 @@ AstNode *varDecleration(Parser *p) {
     AstNode *valueNode = logical(p);
 
     // Evaluate the expression and store the result
-    double res = EvalAst(valueNode);
     char buffer[1024];
-    sprintf(buffer, "%lf", res);
 
+    Result *res = EvalAst(valueNode);
+    if (res->NodeType == NODE_NUMBER) {
+      sprintf(buffer, "%lf", *(double *)res->result);
+    } else if (res->NodeType == NODE_STRING_LITERAL) {
+      strcpy(buffer, (char *)res->result);
+    }
     AstNode *node = newIdentifierNode(sym->dataType, varName, buffer, p->table);
     return node;
   }
