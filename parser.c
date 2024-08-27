@@ -25,14 +25,14 @@ int parserIsAtEnd(Parser *p) {
 }
 
 Token *advanceParser(Parser *p) {
+  do {
+    if (parserIsAtEnd(p)) {
+      return p->current;
+    }
+    p->current = GetNextToken(p->lex);
+  } while (p->current->type == TOKEN_COMMENT);
 
-  if (parserIsAtEnd(p)) {
-    return p->current;
-  }
-
-  Token *tmp = p->current;
-  p->current = GetNextToken(p->lex);
-  return tmp;
+  return p->current;
 }
 
 Token *parserPeek(Parser *p) {
@@ -53,8 +53,8 @@ Token *parserPeekNext(Parser *p) {
 
 void consume(TokenType type, Parser *p) {
   if (p->current->type != type) {
-    printf("unexpected token  %s expected %s\n", tokenNames[p->current->type],
-           tokenNames[type]);
+    printf("%s:%d:Error: unexpected token  %s expected %s\n", p->lex->filename,
+           p->lex->line, tokenNames[p->current->type], tokenNames[type]);
     exit(EXIT_FAILURE);
   }
 
@@ -231,9 +231,10 @@ AstNode *factor(Parser *p) {
     }
   }
 
-  printf("Unexpected token %s with value '%s'. Expected number, parenthesis, "
+  printf("%s:%d:Error: Unexpected token %s with value '%s'. Expected number, "
+         "parenthesis, "
          "or identifier.\n",
-         tokenNames[tkn->type], tkn->value);
+         p->lex->filename, p->lex->line, tokenNames[tkn->type], tkn->value);
   exit(EXIT_FAILURE);
 }
 #if 0
@@ -297,7 +298,6 @@ AstNode *relational(Parser *p) {
                         p->current->type == TOKEN_GREATER ||
                         p->current->type == TOKEN_EQ_GREATER ||
                         p->current->type == TOKEN_EQ_NOT)) {
-
     Token *tkn = p->current;
     consume(tkn->type, p);
     AstNode *right = expr(p);
@@ -306,7 +306,6 @@ AstNode *relational(Parser *p) {
 
   return node;
 }
-
 AstNode *logical(Parser *p) {
   AstNode *node = unary(p);
   while (p->current &&
@@ -445,13 +444,17 @@ AstNode *varDecleration(Parser *p) {
       exit(EXIT_FAILURE);
     }
 
+    // Parse the expression involving the identifier
     AstNode *valueNode = logical(p);
 
-    AstNode *node =
-        newIdentifierNode(sym->dataType, varName, sym->value, p->table);
+    // Evaluate the expression and store the result
+    double res = EvalAst(valueNode);
+    char buffer[1024];
+    sprintf(buffer, "%lf", res);
+
+    AstNode *node = newIdentifierNode(sym->dataType, varName, buffer, p->table);
     return node;
   }
-
   printf("unexpected token %s\n", tokenNames[p->current->type]);
   exit(EXIT_FAILURE);
 }

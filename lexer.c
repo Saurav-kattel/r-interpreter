@@ -14,7 +14,7 @@ Lexer *InitLexer(char *source, char *filename) {
   }
 
   lex->curr = 0;
-  lex->line = 1;
+  lex->line = 0;
   lex->filename = strdup(filename);
   lex->source = (char *)malloc(sizeof(char) * strlen(source));
   strcpy(lex->source, source);
