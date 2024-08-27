@@ -5,5 +5,5 @@
 #include "symbol.h"
 double EvalAst(AstNode *);
 void freeAst(AstNode *);
-AstNode *parseAst(Parser *p, SymbolTable *table);
+AstNode *parseAst(Parser *p);
 #endif // INTERPRETER_H_

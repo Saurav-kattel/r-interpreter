@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-Parser *InitParser(Lexer *lex) {
+Parser *InitParser(Lexer *lex, SymbolTable *table) {
   Parser *p = (Parser *)malloc(sizeof(Parser));
   if (p == NULL) {
     printf("unable to allocate parser");
@@ -16,6 +16,7 @@ Parser *InitParser(Lexer *lex) {
   }
   p->lex = lex;
   p->current = GetNextToken(lex);
+  p->table = table;
   return p;
 }
 
@@ -60,23 +61,28 @@ void consume(TokenType type, Parser *p) {
   advanceParser(p);
 }
 
-AstNode *newIdentifierNode(char *type, char *name, AstNode *value,
+AstNode *newIdentifierNode(char *type, char *name, char *value,
                            SymbolTable *table) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
     printf("unable to allocate new ast node\n");
     exit(EXIT_FAILURE);
   }
+
+  if (lookupSymbol(table, name) == NULL) {
+    Symbol *symbol =
+        createSymbol(name, SYMBOL_VARIABLE, type, value, table->currentScope);
+    insertSymbol(table, symbol);
+  } else {
+    printf("cannot redeclare %s is already decleared \n", name);
+    exit(EXIT_FAILURE);
+  }
+
   node->type = NODE_IDENTIFIER;
-
-  node->identifier.value = value;
-
-  Symbol *symbol =
-      createSymbol(name, SYMBOL_VARIABLE, type, table->currentScope);
-  insertSymbol(table, symbol);
-
+  node->identifier.value = strdup(value);
   node->identifier.type = strdup(type);
   node->identifier.name = strdup(name);
+
   return node;
 }
 
@@ -125,6 +131,32 @@ static double convertStrToDouble(char *s) {
   return val;
 }
 
+AstNode *newStringNode(char *value) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("Unable to allocate new AST node\n");
+    exit(EXIT_FAILURE);
+  }
+
+  node->type = NODE_STRING_LITERAL; // Assuming NODE_STRING_LITERAL is the type
+                                    // for string literals
+  node->stringLiteral.value = strdup(value); // Duplicate the string value
+  return node;
+}
+AstNode *string(Parser *p) {
+
+  if (p->current == NULL) {
+    printf("token is NULL\n");
+    exit(EXIT_FAILURE);
+  }
+  if (p->current->type == TOKEN_STRING) {
+    Token *tkn = p->current;
+    consume(TOKEN_STRING, p);
+    return newStringNode(tkn->value);
+  }
+  return NULL;
+}
+
 AstNode *term(Parser *p) {
 
   if (p->current == NULL) {
@@ -171,27 +203,91 @@ AstNode *factor(Parser *p) {
   Token *tkn = p->current;
 
   if (tkn == NULL) {
+    printf("Error: Token is NULL\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (tkn->type == TOKEN_NUMBER) {
+    double value = convertStrToDouble(tkn->value);
+    consume(TOKEN_NUMBER, p);
+    return newNumberNode(value);
+  } else if (tkn->type == TOKEN_LPAREN) {
+    consume(TOKEN_LPAREN, p);
+    AstNode *node = logical(p); // Assuming logical handles expressions
+    consume(TOKEN_RPAREN, p);
+    return node;
+  } else if (tkn->type == TOKEN_IDEN) {
+    Symbol *sym = lookupSymbol(p->table, tkn->value);
+    if (sym == NULL) {
+      printf("Error: Variable '%s' used before declaration\n", tkn->value);
+      exit(EXIT_FAILURE);
+    }
+    consume(TOKEN_IDEN, p);
+    // Handle different types stored in the symbol table
+    if (strcmp(sym->dataType, "number") == 0) {
+      return newNumberNode(convertStrToDouble(sym->value));
+    } else if (strcmp(sym->dataType, "string") == 0) {
+      return newStringNode(sym->value);
+    }
+  }
+
+  printf("Unexpected token %s with value '%s'. Expected number, parenthesis, "
+         "or identifier.\n",
+         tokenNames[tkn->type], tkn->value);
+  exit(EXIT_FAILURE);
+}
+#if 0
+AstNode *factor(Parser *p) {
+  Token *tkn = p->current;
+
+  if (tkn == NULL) {
     printf("token is NULL\n");
     exit(EXIT_FAILURE);
   }
   if (tkn->type == TOKEN_NUMBER) {
     consume(TOKEN_NUMBER, p);
     double value = convertStrToDouble(tkn->value);
-
     return newNumberNode(value);
   } else if (tkn->type == TOKEN_LPAREN) {
     consume(TOKEN_LPAREN, p);
     AstNode *node = logical(p);
     consume(TOKEN_RPAREN, p);
     return node;
-  }
+  } else if (tkn->type == TOKEN_IDEN) {
+    Symbol *sym = lookupSymbol(p->table, tkn->value);
+    if (sym == NULL) {
+      printf("Error: Variable %s used before declaration\n", tkn->value);
+      exit(EXIT_FAILURE);
+    }
 
-  printf(
-      "unknown token %s with value of %s but expected number or parenthesis\n",
-      tokenNames[tkn->type], tkn->value);
+    if (parserPeek(p)->type == TOKEN_COLON) {
+      consume(TOKEN_IDEN, p);
+      return newIdentifierNode(sym->dataType, sym->name, sym->value, p->table);
+    }
+
+    if (strcmp(sym->dataType, "number") == 0) {
+      AstNode *ast = newNumberNode(convertStrToDouble(sym->value));
+      consume(TOKEN_IDEN, p);
+      return ast;
+    } else if (strcmp(sym->dataType, "string") == 0) {
+      AstNode *ast = newStringNode(sym->value);
+      consume(TOKEN_IDEN, p);
+      return ast;
+    }
+
+    /*
+        consume(TOKEN_IDEN, p);
+        return newIdentifierNode(sym->dataType, sym->name, sym->value,
+       p->table);
+        */
+  }
+  printf("unexpected token %s with value of %s but expected number, "
+         "parenthesis, or identifier\n",
+         tokenNames[tkn->type], tkn->value);
   exit(EXIT_FAILURE);
 }
 
+#endif
 AstNode *relational(Parser *p) {
   AstNode *node = expr(p);
 
@@ -233,42 +329,129 @@ AstNode *unary(Parser *p) {
   return relational(p);
 }
 
+#if 0
 // for variable decleration
-AstNode *varDecleration(Parser *p, SymbolTable *table) {
+AstNode *varDecleration(Parser *p) {
+  Token *tkn = p->current;
+
+  char *varName = strdup(tkn->value);
+  consume(TOKEN_IDEN, p);
+
+  consume(TOKEN_COLON, p);
+
+  char *type = strdup(p->current->value);
+  consume(TOKEN_IDEN, p);
+
+  consume(TOKEN_ASSIGN, p);
+  printf("current token %s\n", tokenNames[p->current->type]);
+
+  if (p->current->type == TOKEN_NUMBER) {
+
+    AstNode *valueNode = logical(p);
+    consume(TOKEN_SEMI_COLON, p);
+
+    double res = EvalAst(valueNode);
+
+    char buffer[1024];
+    sprintf(buffer, "%lf", res);
+
+    AstNode *identifierNode =
+        newIdentifierNode("number", varName, buffer, p->table);
+    return identifierNode;
+  }
+
+  if (p->current->type == TOKEN_STRING) {
+    AstNode *node =
+        newIdentifierNode("string", varName, p->current->value, p->table);
+    advanceParser(p);
+    return node;
+  }
+
+  if (p->current->type == TOKEN_IDEN) {
+
+    Symbol *sym = lookupSymbol(p->table, p->current->value);
+    if (sym == NULL) {
+      printf("Error: Variable %s used before declaration\n", p->current->value);
+      exit(EXIT_FAILURE);
+    }
+
+    AstNode *valueNode = logical(p);
+
+    AstNode *node =
+        newIdentifierNode(sym->dataType, varName, sym->value, p->table);
+    advanceParser(p);
+    return node;
+  }
+  printf("unexpected token %s\n", tokenNames[p->current->type]);
+  exit(EXIT_FAILURE);
+}
+#endif
+
+AstNode *varDecleration(Parser *p) {
   Token *tkn = p->current;
 
   if (tkn->type != TOKEN_IDEN) {
-    printf("Expected identifier, got %s\n", tokenNames[tkn->type]);
+    printf("%s:%d:Error: Expected identifier, got %s \n", p->lex->filename,
+           p->lex->line, tokenNames[tkn->type]);
     exit(EXIT_FAILURE);
   }
 
   char *varName = strdup(tkn->value);
-  advanceParser(p);
+  consume(TOKEN_IDEN, p);
 
-  if (p->current->type != TOKEN_COLON) {
-    printf("Expected :, got %s\n", tokenNames[tkn->type]);
-    exit(EXIT_FAILURE);
-  }
+  consume(TOKEN_COLON, p);
 
-  advanceParser(p);
   if (p->current->type != TOKEN_IDEN) {
-    printf("Expected variable type, got %s\n", tokenNames[tkn->type]);
+    printf("%s:%d:Error: Expected type, got %s \n", p->lex->filename,
+           p->lex->line, tokenNames[p->current->type]);
     exit(EXIT_FAILURE);
   }
+
   char *type = strdup(p->current->value);
-  advanceParser(p);
-  if (p->current->type != TOKEN_ASSIGN) {
-    printf("Expected =, got %s\n", tokenNames[tkn->type]);
-    exit(EXIT_FAILURE);
+  consume(TOKEN_IDEN, p);
+
+  consume(TOKEN_ASSIGN, p);
+  printf("current token %s\n", tokenNames[p->current->type]);
+
+  // Debugging info
+  printf("\n\nDebug: Current token type: %s, value: %s\n\n",
+         tokenNames[p->current->type], p->current->value);
+
+  if (p->current->type == TOKEN_NUMBER) {
+
+    AstNode *valueNode = logical(p);
+    // consume(TOKEN_SEMI_COLON, p);
+    double res = EvalAst(valueNode);
+    char buffer[1024];
+    sprintf(buffer, "%lf", res);
+
+    AstNode *identifierNode =
+        newIdentifierNode("number", varName, buffer, p->table);
+    return identifierNode;
   }
-  advanceParser(p);
-  printf("%s\n", tokenNames[p->current->type]);
-  AstNode *valueNode = logical(p);
 
-  AstNode *identifierNode = newIdentifierNode(type, varName, valueNode, table);
+  if (p->current->type == TOKEN_STRING) {
+    AstNode *node =
+        newIdentifierNode("string", varName, p->current->value, p->table);
+    advanceParser(p);
+    return node;
+  }
 
-  free(varName);
-  free(type);
+  if (p->current->type == TOKEN_IDEN) {
+    Symbol *sym = lookupSymbol(p->table, p->current->value);
+    if (sym == NULL) {
+      printf("%s:%d:Error: Variable %s used before declaration\n",
+             p->lex->filename, p->lex->line, p->current->value);
+      exit(EXIT_FAILURE);
+    }
 
-  return identifierNode;
+    AstNode *valueNode = logical(p);
+
+    AstNode *node =
+        newIdentifierNode(sym->dataType, varName, sym->value, p->table);
+    return node;
+  }
+
+  printf("unexpected token %s\n", tokenNames[p->current->type]);
+  exit(EXIT_FAILURE);
 }

@@ -28,7 +28,7 @@ $(TARGET): $(OBJECTS)
 # Build the object files
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)  # Create the directory if it doesn't exist
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -c  -o  $@ $<
 
 # Install target
 install: $(TARGET)

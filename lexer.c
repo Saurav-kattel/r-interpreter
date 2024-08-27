@@ -6,7 +6,7 @@
 #include <time.h>
 
 // A constructor for Lexer reutrns Lexer
-Lexer *InitLexer(char *source) {
+Lexer *InitLexer(char *source, char *filename) {
   Lexer *lex = (Lexer *)malloc(sizeof(Lexer));
   if (lex == NULL) {
     printf("Failed allocating memory for lexer\n");
@@ -14,7 +14,8 @@ Lexer *InitLexer(char *source) {
   }
 
   lex->curr = 0;
-  lex->line = 0;
+  lex->line = 1;
+  lex->filename = strdup(filename);
   lex->source = (char *)malloc(sizeof(char) * strlen(source));
   strcpy(lex->source, source);
   return lex;
@@ -34,6 +35,9 @@ char advance(Lexer *l) {
   if (!isAtEnd(l)) {
     char ch = l->source[l->curr];
     l->curr++;
+    if (ch == '\n') {
+      l->line++;
+    }
     return ch;
   }
   return 0;
@@ -88,7 +92,7 @@ Token *GetNextToken(Lexer *l) {
     // strncpy(buffer, l->source + start, length);
     buffer[length] = '\0';
 
-    Token *tkn = NewToken(TOKEN_STIRNG, buffer);
+    Token *tkn = NewToken(TOKEN_STRING, buffer);
     free(buffer);
     return tkn;
   }

@@ -47,7 +47,8 @@ typedef struct Symbol {
   char *name;      // Identifier name
   SymbolType type; // Type of symbol (variable, function, etc.)
   char *dataType;  // For variables, the type (e.g., int, float)
-  int scope;       // Scope level (e.g., global, local)
+  int scope;
+  char *value; // Scope level (e.g., global, local)
   // Additional attributes can be added here
   struct Symbol *next; // For chaining in hash table
 } Symbol;
@@ -63,6 +64,7 @@ void deleteSymbol(SymbolTable *table, char *name);
 void updateSymbol(SymbolTable *table, char *name, int newType, int newValue);
 int checkSymbolExistence(SymbolTable *table, char *name);
 void listSymbols(SymbolTable *table, int scope);
-Symbol *createSymbol(char *name, SymbolType type, char *dataType, int scope);
+Symbol *createSymbol(char *name, SymbolType type, char *dataType, char *value,
+                     int scope);
 
 #endif // SYMBOL_H_

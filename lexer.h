@@ -4,7 +4,7 @@
 enum {
 
   // literals
-  TOKEN_STIRNG,
+  TOKEN_STRING,
   TOKEN_NUMBER,
   TOKEN_IDEN,
   // symbols
@@ -79,6 +79,7 @@ typedef struct {
   char *source;
   int curr;
   int line;
+  char *filename;
 } Lexer;
 
 typedef struct {
@@ -86,7 +87,7 @@ typedef struct {
   char value[100];
 } Token;
 
-Lexer *InitLexer(char *);
+Lexer *InitLexer(char *, char *);
 Token *NewToken(TokenType, char *);
 Token *GetNextToken(Lexer *);
 char peek(Lexer *);

@@ -5,7 +5,8 @@
 #include <string.h>
 
 // Create a new symbol
-Symbol *createSymbol(char *name, SymbolType type, char *dataType, int scope) {
+Symbol *createSymbol(char *name, SymbolType type, char *dataType, char *value,
+                     int scope) {
   Symbol *sym = (Symbol *)malloc(sizeof(Symbol));
   if (!sym) {
     perror("Unable to allocate memory for symbol");
@@ -16,6 +17,7 @@ Symbol *createSymbol(char *name, SymbolType type, char *dataType, int scope) {
   sym->dataType = strdup(dataType);
   sym->scope = scope;
   sym->next = NULL;
+  sym->value = strdup(value);
   return sym;
 }
 
@@ -42,11 +44,6 @@ unsigned int hash(char *name) {
   return hash % TABLE_SIZE;
 }
 
-// void insertSymbol(SymbolTable *table, Symbol *sym);
-
-//  Add a symbol to the symbol table
-
-// Add a symbol to the symbol table
 void insertSymbol(SymbolTable *table, Symbol *sym) {
   // Calculate the index in the hash table
   unsigned int index = hash(sym->name);
@@ -108,6 +105,7 @@ void freeSymbolTable(SymbolTable *table) {
       Symbol *temp = sym;
       sym = sym->next;
       free(temp->name);
+      free(temp->value);
       free(temp);
     }
   }

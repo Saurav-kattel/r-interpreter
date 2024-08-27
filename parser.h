@@ -15,6 +15,7 @@ enum {
 typedef struct {
   Token *current;
   Lexer *lex;
+  SymbolTable *table;
 } Parser;
 
 typedef struct AstNode {
@@ -35,8 +36,12 @@ typedef struct AstNode {
     struct {
       char *name;
       char *type;
-      struct AstNode *value;
+      char *value;
     } identifier;
+
+    struct {
+      char *value;
+    } stringLiteral;
   };
 } AstNode;
 
@@ -46,12 +51,13 @@ AstNode *factor(Parser *);
 AstNode *unary(Parser *);
 AstNode *relational(Parser *);
 AstNode *logical(Parser *p);
-
+AstNode *string(Parser *p);
 double EvalAst(AstNode *);
-
-Parser *InitParser(Lexer *);
+AstNode *parseProgram(Parser *p, SymbolTable *table);
+AstNode *parseStatement(Parser *p, SymbolTable *table);
+Parser *InitParser(Lexer *, SymbolTable *);
 void freeAst(AstNode *);
 void consume(TokenType, Parser *);
 
-AstNode *varDecleration(Parser *p, SymbolTable *table);
+AstNode *varDecleration(Parser *p);
 #endif // PRASER_H

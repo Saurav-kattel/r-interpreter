@@ -1,4 +1,4 @@
-
+#if 1
 
 #include "interpreter.h"
 #include "lexer.h"
@@ -45,18 +45,27 @@ int main(int argc, char **argv) {
   // reading the file content into string
   fread(file_content, sizeof(char), file_size, fp);
   file_content[file_size] = '\0';
-  Lexer *lex = InitLexer(file_content);
-  Parser *p = InitParser(lex);
+  Lexer *lex = InitLexer(file_content, file_name);
+
   SymbolTable *table = (SymbolTable *)malloc(sizeof(SymbolTable));
+  Parser *p = InitParser(lex, table);
+
+  printf("\n\n%s\n\n", file_content);
 
   while (p->current->type != TOKEN_EOF) {
-    AstNode *ast = parseAst(p, table);
-    if (ast->type != NODE_IDENTIFIER) {
+    AstNode *ast = parseAst(p);
+    if (ast->type != NODE_STRING_LITERAL && ast->type != NODE_IDENTIFIER) {
       double result = EvalAst(ast);
-      printf("result is %.3lf\n", result);
+      printf("\n %.3lf\n", result);
+    } else if (ast->type == NODE_STRING_LITERAL) {
+      printf("\n%s\n", ast->stringLiteral.value);
+    } else if (ast->type == NODE_IDENTIFIER) {
+      printf("\n<name: %s| value: %s| type:%s>\n\n", ast->identifier.name,
+             ast->identifier.value, ast->identifier.type);
     }
     freeAst(ast);
   }
+
   free(p);
 
   free(lex);
@@ -64,3 +73,5 @@ int main(int argc, char **argv) {
   free(file_content);
   return 0;
 }
+
+#endif

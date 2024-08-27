@@ -53,6 +53,8 @@ double EvalAst(AstNode *node) {
   }
   case NODE_IDENTIFIER:
     break;
+  case NODE_STRING_LITERAL:
+    break;
   default:
     printf("unhandled token \n");
     exit(1);
@@ -69,16 +71,17 @@ void freeAst(AstNode *node) {
   free(node);
 }
 
-AstNode *parseAst(Parser *p, SymbolTable *table) {
-
+AstNode *parseAst(Parser *p) {
   if (p->current->type == TOKEN_IDEN) {
-    AstNode *ast = varDecleration(p, table);
+    AstNode *ast = varDecleration(p);
+    consume(TOKEN_SEMI_COLON, p);
+    return ast;
+  } else if (p->current->type == TOKEN_STRING) {
+    AstNode *ast = string(p);
     consume(TOKEN_SEMI_COLON, p);
     return ast;
   }
-
   AstNode *ast = logical(p);
-
   consume(TOKEN_SEMI_COLON, p);
   return ast;
 }
