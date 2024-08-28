@@ -36,6 +36,12 @@ enum {
   TOKEN_AND,
   TOKEN_OR,
   TOKEN_NOT,
+
+  TOKEN_IF,
+  TOKEN_ELSE,
+  TOKEN_FOR,
+  TOKEN_RETURN,
+  TOKEN_FN,
 };
 
 static const char *tokenNames[] = {
@@ -67,10 +73,18 @@ static const char *tokenNames[] = {
     "TOKEN_DB_EQUAL",
     "TOKEN_EQ_GREATER",
     "TOKEN_EQ_LESSER",
+    "TOKEN_EQ_NOT",
+
     // LOGICAL
     "TOKEN_AND",
     "TOKEN_OR",
     "TOKEN_NOT",
+
+    "TOKEN_IF",
+    "TOKEN_ELSE",
+    "TOKEN_FOR",
+    "TOKEN_RETURN",
+    "TOKEN_FN",
 };
 
 typedef int TokenType;

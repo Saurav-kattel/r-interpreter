@@ -18,14 +18,14 @@ static double convertStrToDouble(char *s) {
   return val;
 }
 
-Result *EvalAst(AstNode *node) {
+Result *EvalAst(AstNode *node, Parser *p) {
   switch (node->type) {
   case NODE_NUMBER:
     return newResult(&node->number, NODE_NUMBER);
 
   case NODE_BINARY_OP: {
-    Result *left = EvalAst(node->binaryOp.left);
-    Result *right = EvalAst(node->binaryOp.right);
+    Result *left = EvalAst(node->binaryOp.left, p);
+    Result *right = EvalAst(node->binaryOp.right, p);
 
     if (left->NodeType == NODE_NUMBER && right->NodeType == NODE_NUMBER) {
       double leftVal = *(double *)(left->result);
@@ -67,7 +67,7 @@ Result *EvalAst(AstNode *node) {
   }
 
   case NODE_UNARY_OP: {
-    Result *right = EvalAst(node->unaryOp.right);
+    Result *right = EvalAst(node->unaryOp.right, p);
 
     if (right->NodeType == NODE_NUMBER) {
       double rightVal = *(double *)(right->result);
@@ -86,16 +86,16 @@ Result *EvalAst(AstNode *node) {
   }
 
   case NODE_IDENTIFIER: {
-
-    Symbol *sym = lookupSymbol(node->identifier.table, node->identifier.name);
+    SymbolTableEntry *sym =
+        lookupSymbol(node->identifier.table, node->identifier.name);
     if (sym == NULL) {
       printf("Error: Variable '%s' not found\n", node->identifier.name);
       exit(EXIT_FAILURE);
     }
 
-    if (strcmp(sym->dataType, "number") == 0) {
+    if (strcmp(sym->type, "number") == 0) {
       return newResult(&(double){convertStrToDouble(sym->value)}, NODE_NUMBER);
-    } else if (strcmp(sym->dataType, "string") == 0) {
+    } else if (strcmp(sym->type, "string") == 0) {
       return newResult(sym->value, NODE_STRING_LITERAL);
     }
   }
@@ -106,8 +106,37 @@ Result *EvalAst(AstNode *node) {
     return newResult(str, NODE_STRING_LITERAL);
   }
 
+  case NODE_BLOCK: {
+    Result *res;
+    for (int i = 0; i < node->block.statementCount; i++) {
+      res = EvalAst(node->block.statements[i], p);
+    }
+    return res;
+  } // Retu
+  break;
+  case NODE_IF_ELSE: {
+    Result *conditionResult = EvalAst(node->ifElseBlock.condition, p);
+
+    if (conditionResult->NodeType != NODE_NUMBER) {
+      printf("Error: Condition in if-else must be a number (interpreted as "
+             "boolean)\n");
+      exit(EXIT_FAILURE);
+    }
+
+    double conditionValue = *(double *)(conditionResult->result);
+
+    if (conditionValue) {
+      // If condition is true (non-zero), execute ifBlock
+      return EvalAst(node->ifElseBlock.ifBlock, p);
+    } else if (node->ifElseBlock.elseBlock != NULL) {
+      // If condition is false and there is an elseBlock, execute elseBlock
+      return EvalAst(node->ifElseBlock.elseBlock, p);
+    }
+    return NULL; // No elseBlock and condition was false
+  }
+
   default:
-    printf("Error: Unhandled node type %d\n", node->type);
+    printf("he");
     exit(EXIT_FAILURE);
   }
 
@@ -125,17 +154,42 @@ void freeAst(AstNode *node) {
 }
 
 AstNode *parseAst(Parser *p) {
-  if (p->current->type == TOKEN_IDEN) {
+
+  if (parserIsAtEnd(p)) {
+    return NULL; // No more tokens to parse
+  }
+
+  Token *tkn = p->current;
+  switch (tkn->type) {
+  case TOKEN_IDEN: {
+    // Handle variable declaration or assignment
     AstNode *ast = varDecleration(p);
     consume(TOKEN_SEMI_COLON, p);
     return ast;
-  } else if (p->current->type == TOKEN_STRING) {
-    AstNode *ast = string(p);
-    consume(TOKEN_SEMI_COLON, p);
-    return ast;
   }
+  case TOKEN_STRING: {
+    AstNode *ast = string(p);
+    consume(TOKEN_SEMI_COLON, p); // Assuming statements end with a semicolon
+    return ast;
+  } // Handle string literals (if needed)
+  case TOKEN_NUMBER: {
+    // Handle number literals (if needed)
+    AstNode *numberNode = factor(p);
+    consume(TOKEN_SEMI_COLON, p); // Assuming statements end with a semicolon
+    return numberNode;
+  }
+  case TOKEN_IF:
+    // Handle if-else statements
+    return ifElseParser(p);
 
-  AstNode *ast = logical(p);
-  consume(TOKEN_SEMI_COLON, p);
-  return ast;
+  case TOKEN_LCURLY: {
+    // Handle block statements
+    AstNode *st = parseBlockStmt(p);
+    return st;
+  }
+  default:
+    printParseError(p, "Unexpected token %s falling through the condition\n",
+                    tokenNames[tkn->type]);
+    exit(EXIT_FAILURE);
+  }
 }

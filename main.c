@@ -47,21 +47,23 @@ int main(int argc, char **argv) {
   file_content[file_size] = '\0';
   Lexer *lex = InitLexer(file_content, file_name);
 
-  SymbolTable *table = (SymbolTable *)malloc(sizeof(SymbolTable));
+  SymbolTable *table = createSymbolTable(100);
   Parser *p = InitParser(lex, table);
 
   printf("\n\n%s\n\n", file_content);
 
   while (p->current->type != TOKEN_EOF) {
     AstNode *ast = parseAst(p);
-    if (ast->type != NODE_STRING_LITERAL && ast->type != NODE_IDENTIFIER) {
-      Result *result = EvalAst(ast);
-      printf("\n %.3lf\n", result->result);
-    } else if (ast->type == NODE_STRING_LITERAL) {
-      printf("\n%s\n", ast->stringLiteral.value);
-    } else if (ast->type == NODE_IDENTIFIER) {
-      printf("\n<name: %s| value: %s| type:%s>\n\n", ast->identifier.name,
-             ast->identifier.value, ast->identifier.type);
+    if (ast) {
+      if (ast->type != NODE_STRING_LITERAL && ast->type != NODE_IDENTIFIER) {
+        Result *result = EvalAst(ast, p);
+        printf("\n %.3lf\n", *(double *)result->result);
+      } else if (ast->type == NODE_STRING_LITERAL) {
+        printf("\n%s\n", ast->stringLiteral.value);
+      } else if (ast->type == NODE_IDENTIFIER) {
+        printf("\n<name: %s| value: %s| type:%s>\n\n", ast->identifier.name,
+               ast->identifier.value, ast->identifier.type);
+      }
     }
     freeAst(ast);
   }

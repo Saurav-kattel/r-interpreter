@@ -42,6 +42,7 @@ typedef struct SymbolTable {
 // Enum for different symbol types
 typedef enum { SYMBOL_VARIABLE, SYMBOL_FUNCTION, SYMBOL_TYPE } SymbolType;
 
+#if 0
 // Struct for storing symbol information
 typedef struct Symbol {
   char *name;      // Identifier name
@@ -66,5 +67,33 @@ int checkSymbolExistence(SymbolTable *table, char *name);
 void listSymbols(SymbolTable *table, int scope);
 Symbol *createSymbol(char *name, SymbolType type, char *dataType, char *value,
                      int scope);
+void enterScope(SymbolTable *table);
+void printSymbolTable(SymbolTable *table);
+void exitScope(SymbolTable *table);
+#endif
+typedef struct {
+  char *symbol;
+  char *type;  // Add a type field to each symbol table entry
+  void *value; // Use a void pointer to store values of different types
+  int scope;   // Add a scope field to each symbol table entry
+} SymbolTableEntry;
+
+// Define a structure to represent the symbol table
+typedef struct {
+  SymbolTableEntry *entries;
+  int size;
+  int capacity;
+  int currentScope; // Keep track of the current scope
+} SymbolTable;
+
+SymbolTable *createSymbolTable(int initialCapacity);
+
+void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value);
+
+SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol);
+
+void enterScope(SymbolTable *table);
+
+void exitScope(SymbolTable *table);
 
 #endif // SYMBOL_H_

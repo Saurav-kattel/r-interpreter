@@ -18,6 +18,8 @@ enum {
   NODE_STRING_LITERAL,
   NODE_IDENTIFIER,
   NODE_UNARY_OP,
+  NODE_BLOCK,
+  NODE_IF_ELSE,
 };
 
 typedef struct Result {
@@ -54,6 +56,17 @@ typedef struct AstNode {
     } identifier;
 
     struct {
+      struct AstNode **statements;
+      int statementCount;
+    } block;
+
+    struct {
+      struct AstNode *condition;
+      struct AstNode *ifBlock;
+      struct AstNode *elseBlock;
+    } ifElseBlock;
+
+    struct {
       char *value;
     } stringLiteral;
   };
@@ -68,7 +81,9 @@ AstNode *relational(Parser *);
 AstNode *logical(Parser *p);
 AstNode *string(Parser *p);
 AstNode *varDecleration(Parser *p);
-
+AstNode *parseBlockStmt(Parser *p);
+AstNode *ifElseParser(Parser *p);
+AstNode *parseStatement(Parser *p);
 // utils
 Parser *InitParser(Lexer *, SymbolTable *);
 void freeAst(AstNode *);
@@ -76,7 +91,8 @@ void consume(TokenType, Parser *);
 void printParseError(Parser *p, const char *s, ...);
 void printContext(Parser *p);
 int checkValidType(Token *);
+int parserIsAtEnd(Parser *p);
 // MIGHT BE NEEDED
 AstNode *parseProgram(Parser *p, SymbolTable *table);
-AstNode *parseStatement(Parser *p, SymbolTable *table);
+int isKeyword(char *);
 #endif // PRASER_H

@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "parser.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,6 +62,39 @@ void skipWhiteSpace(Lexer *l) {
     advance(l);
   }
 }
+
+TokenType getKeywordTokenType(char *buff) {
+  if (strcmp(buff, "if") == 0) {
+    return TOKEN_IF;
+  }
+  if (strcmp(buff, "else") == 0) {
+    return TOKEN_ELSE;
+  }
+
+  if (strcmp(buff, "for") == 0) {
+    return TOKEN_FOR;
+  }
+
+  if (strcmp(buff, "return") == 0) {
+    return TOKEN_RETURN;
+  }
+
+  if (strcmp(buff, "fn") == 0) {
+    return TOKEN_FN;
+  }
+
+  return -1;
+}
+int isNotTypeKeyword(char *name) {
+  int arraySize = 4;
+  const char *keywords[] = {"if", "fn", "else", "for"};
+  for (int i = 0; i < arraySize; i++) {
+    if (strcmp(keywords[i], name) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
 Token *GetNextToken(Lexer *l) {
   skipWhiteSpace(l);
   char c = advance(l);
@@ -111,6 +145,16 @@ Token *GetNextToken(Lexer *l) {
     char *buffer = (char *)malloc(length + 1);
     strncpy(buffer, l->source + start, length);
     buffer[length] = '\0';
+    if (isNotTypeKeyword(buffer)) {
+      TokenType type = getKeywordTokenType(buffer);
+      if (type == -1) {
+        printf("unkwon type\n");
+        exit(EXIT_FAILURE);
+      }
+      Token *tkn = NewToken(type, buffer);
+      free(buffer);
+      return tkn;
+    }
     Token *tkn = NewToken(TOKEN_IDEN, buffer);
     free(buffer);
     return tkn;
@@ -157,16 +201,16 @@ Token *GetNextToken(Lexer *l) {
 
   if (c == '{') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_LPAREN, "{");
+      return NewToken(TOKEN_LCURLY, "{");
     }
     printf("unexpected token {\n");
   }
 
   if (c == '}') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_RPAREN, "}");
+      return NewToken(TOKEN_RCURLY, "}");
     }
-    printf("unexpecteRRRRRRRRRRn");
+    printf("should not happen\n");
   }
 
   if (c == ';') {
