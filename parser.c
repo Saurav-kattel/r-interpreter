@@ -77,8 +77,41 @@ static char *getType(Parser *p) {
   exit(EXIT_FAILURE);
 }
 
+void printContext(Parser *p) {
+  // Find the start of the current line
+  int start = p->lex->curr;
+  while (start > 0 && p->lex->source[start - 1] != '\n') {
+    start--;
+  }
+
+  // Find the end of the current line
+  int end = p->lex->curr;
+  while (p->lex->source[end] != '\0' && p->lex->source[end] != '\n') {
+    end++;
+  }
+
+  // Calculate the length of the line
+  int length = end - start;
+
+  // Allocate memory for the line and copy it
+  char *line = (char *)malloc(length + 1);
+  if (line == NULL) {
+    printf("Failed allocating memory for line\n");
+    exit(EXIT_FAILURE);
+  }
+
+  strncpy(line, &p->lex->source[start], length);
+  line[length] = '\0'; // Null-terminate the string
+
+  // Print the entire line
+  printf("\t\tat line %d::-> %s\n", p->lex->line, line);
+
+  // Free the allocated memory
+  free(line);
+}
+
 void printParseError(Parser *p, const char *s, ...) {
-  printf("%s:%d:Error:", p->lex->filename, p->lex->line);
+  printf("%s::%d::Error::-> ", p->lex->filename, p->lex->line);
   va_list args;
   va_start(args, s);
   while (*s != '\0') {
@@ -104,6 +137,7 @@ void printParseError(Parser *p, const char *s, ...) {
     s++;
   }
   va_end(args);
+  printContext(p);
 }
 
 AstNode *newIdentifierNode(char *type, char *name, char *value,
@@ -338,8 +372,8 @@ AstNode *varDecleration(Parser *p) {
 
   // type of the variable
   if (p->current->type != TOKEN_IDEN) {
-    printf("%s:%d:Error: Expected type, got %s \n", p->lex->filename,
-           p->lex->line, tokenNames[p->current->type]);
+    printParseError(p, "Expected type, got %s \n",
+                    tokenNames[p->current->type]);
     exit(EXIT_FAILURE);
   }
 
@@ -349,7 +383,7 @@ AstNode *varDecleration(Parser *p) {
   consume(TOKEN_ASSIGN, p);
   if (p->current->type == TOKEN_NUMBER) {
     if (strcmp(typeToken->value, getType(p)) != 0) {
-      printParseError(p, "expected type number but got %s\n", typeToken->value);
+      printParseError(p, "expected type %s but got number\n", typeToken->value);
       free(typeToken);
       exit(EXIT_FAILURE);
     }
@@ -366,7 +400,7 @@ AstNode *varDecleration(Parser *p) {
   if (p->current->type == TOKEN_STRING) {
 
     if (strcmp(typeToken->value, getType(p)) != 0) {
-      printParseError(p, "expected type string but got %s\n", typeToken->value);
+      printParseError(p, "expected type %s but got string\n", typeToken->value);
       free(typeToken);
       exit(EXIT_FAILURE);
     }
