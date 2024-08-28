@@ -4,6 +4,14 @@
 #include "lexer.h"
 #include "symbol.h"
 
+#define RED "\033[31m"
+#define GREEN "\033[32m"
+#define YELLOW "\033[33m"
+#define BLUE "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN "\033[36m"
+#define RESET "\033[0m"
+
 enum {
   NODE_BINARY_OP,
   NODE_NUMBER,
@@ -61,10 +69,13 @@ AstNode *logical(Parser *p);
 AstNode *string(Parser *p);
 AstNode *varDecleration(Parser *p);
 
+// utils
 Parser *InitParser(Lexer *, SymbolTable *);
 void freeAst(AstNode *);
 void consume(TokenType, Parser *);
-
+void printParseError(Parser *p, const char *s, ...);
+void printContext(Parser *p);
+int checkValidType(Token *);
 // MIGHT BE NEEDED
 AstNode *parseProgram(Parser *p, SymbolTable *table);
 AstNode *parseStatement(Parser *p, SymbolTable *table);

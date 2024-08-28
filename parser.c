@@ -55,8 +55,8 @@ Token *parserPeekNext(Parser *p) {
 
 void consume(TokenType type, Parser *p) {
   if (p->current->type != type) {
-    printf("%s:%d:Error: unexpected token  %s expected %s\n", p->lex->filename,
-           p->lex->line, tokenNames[p->current->type], tokenNames[type]);
+    printParseError(p, "unexpected token  %s expected %s\n",
+                    tokenNames[p->current->type], tokenNames[type]);
     exit(EXIT_FAILURE);
   }
 
@@ -69,12 +69,9 @@ static char *getType(Parser *p) {
     return "number";
   case TOKEN_STRING:
     return "string";
+  default:
+    return "none";
   }
-
-  printf(
-      "%s:%d:Error invalid type found expected string or number but got %s\n",
-      p->lex->filename, p->lex->line, tokenNames[p->current->type]);
-  exit(EXIT_FAILURE);
 }
 
 void printContext(Parser *p) {
@@ -102,43 +99,72 @@ void printContext(Parser *p) {
 
   strncpy(line, &p->lex->source[start], length);
   line[length] = '\0'; // Null-terminate the string
-
   // Print the entire line
-  printf("\t\tat line %d::-> %s\n", p->lex->line, line);
-
+  printf(BLUE "at line" RESET);
+  printf(GREEN "::" RESET);
+  printf(CYAN "%d" RESET, p->lex->line);
+  printf(GREEN "::" RESET);
+  printf(RED "-> " RESET);
+  printf(RED "%s\n" RESET, line);
   // Free the allocated memory
   free(line);
 }
 
+int isKeyword(char *name) {
+  int arraySize = 6;
+  const char *keywords[] = {"number", "string", "if", "fn", "else", "for"};
+  for (int i = 0; i < arraySize; i++) {
+    if (strcmp(keywords[i], name) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 void printParseError(Parser *p, const char *s, ...) {
-  printf("%s::%d::Error::-> ", p->lex->filename, p->lex->line);
   va_list args;
   va_start(args, s);
-  while (*s != '\0') {
-    if (*s == '%' && *(s + 1) == 'd') {
-      int i = va_arg(args, int);
-      printf("%d", i);
-      s++;
-    } else if (*s == '%' && *(s + 1) == 'c') {
-      int c = va_arg(args,
-                     int); // char is promoted to int when passed through '...'
-      putchar(c);
-      s++;
-    } else if (*s == '%' && *(s + 1) == 's') {
-      char *str = va_arg(args, char *);
-      printf("%s", str);
-      s++;
-    } else if (*s == '\n') {
-      printf("\n");
-      s++;
-    } else {
-      putchar(*s);
-    }
-    s++;
-  }
+
+  // Print the filename and line number with color
+  printf(MAGENTA "%s" RESET, p->lex->filename);
+  printf(GREEN "::" RESET);
+  printf(BLUE "%d" RESET, p->lex->line);
+  printf(GREEN "::" RESET);
+  printf(RED "Error-> " RESET);
+  fflush(stdout);
+
+  // Print the error message with color
+  fprintf(stderr, YELLOW); // Set text color to yellow for the error message
+  vfprintf(stderr, s, args);
+  fprintf(stderr, RESET); // Reset text color
+
   va_end(args);
+
+  // Print the context (with no color change, assuming it should be default)
   printContext(p);
 }
+
+static double convertStrToDouble(char *s) {
+  double val;
+  sscanf(s, "%lf", &val);
+  return val;
+}
+
+int checkValidType(Token *typeToken) {
+
+  int arraySize = 2;
+  const char *types[] = {"number", "string"};
+
+  for (int i = 0; i < arraySize; i++) {
+    if (strcmp(types[i], typeToken->value) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+// -------------------------for parsing ast -----------------------
+//
 
 AstNode *newIdentifierNode(char *type, char *name, char *value,
                            SymbolTable *table) {
@@ -205,12 +231,6 @@ AstNode *newUnaryNode(TokenType type, AstNode *right) {
   return node;
 }
 
-static double convertStrToDouble(char *s) {
-  double val;
-  sscanf(s, "%lf", &val);
-  return val;
-}
-
 AstNode *newStringNode(char *value) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
@@ -218,8 +238,8 @@ AstNode *newStringNode(char *value) {
     exit(EXIT_FAILURE);
   }
 
-  node->type = NODE_STRING_LITERAL; // Assuming NODE_STRING_LITERAL is the type
-                                    // for string literals
+  node->type = NODE_STRING_LITERAL; // Assuming NODE_STRING_LITERAL is the
+                                    // type for string literals
   node->stringLiteral.value = strdup(value); // Duplicate the string value
   return node;
 }
@@ -310,10 +330,11 @@ AstNode *factor(Parser *p) {
     }
   }
 
-  printf("%s:%d:Error: Unexpected token %s with value '%s'. Expected number, "
-         "parenthesis, "
-         "or identifier.\n",
-         p->lex->filename, p->lex->line, tokenNames[tkn->type], tkn->value);
+  printParseError(p,
+                  "Unexpected token %s with value '%s'. Expected number, "
+                  "parenthesis, "
+                  "or identifier.\n",
+                  tokenNames[tkn->type], tkn->value);
   exit(EXIT_FAILURE);
 }
 
@@ -356,90 +377,107 @@ AstNode *unary(Parser *p) {
   return relational(p);
 }
 
+AstNode *handleNumberIdentifiers(Parser *p, Token *typeToken, char *varName) {
+  if (strcmp(typeToken->value, getType(p)) != 0) {
+    printParseError(p, "expected type %s but got number\n", typeToken->value);
+    free(typeToken);
+    exit(EXIT_FAILURE);
+  }
+  AstNode *valueNode = logical(p);
+  Result *res = EvalAst(valueNode);
+  char buffer[1024];
+  sprintf(buffer, "%lf", *(double *)res->result);
+
+  AstNode *identifierNode =
+      newIdentifierNode("number", varName, buffer, p->table);
+  return identifierNode;
+}
+
+AstNode *handleStringIdentifiers(Parser *p, Token *typeToken, char *varName) {
+  if (strcmp(typeToken->value, getType(p)) != 0) {
+    printParseError(p, "expected type %s but got string\n", typeToken->value);
+    free(typeToken);
+    exit(EXIT_FAILURE);
+  }
+
+  AstNode *node =
+      newIdentifierNode("string", varName, p->current->value, p->table);
+  advanceParser(p);
+  return node;
+}
+
+AstNode *handleIdenIdentifiers(Parser *p, Token *typeToken, char *varName) {
+  Symbol *sym = lookupSymbol(p->table, p->current->value);
+  if (strcmp(sym->dataType, typeToken->value) != 0) {
+    printParseError(p, "cannot assign type %s to type %s\n", sym->dataType,
+                    typeToken->value);
+    exit(EXIT_FAILURE);
+  }
+  if (sym == NULL) {
+    printParseError(p, "Variable %s used before declaration\n",
+                    p->current->value);
+    exit(EXIT_FAILURE);
+  }
+
+  // Parse the expression involving the identifier
+  AstNode *valueNode = logical(p);
+
+  // Evaluate the expression and store the result
+  char buffer[1024];
+
+  Result *res = EvalAst(valueNode);
+  if (res->NodeType == NODE_NUMBER) {
+    sprintf(buffer, "%lf", *(double *)res->result);
+  } else if (res->NodeType == NODE_STRING_LITERAL) {
+    strcpy(buffer, (char *)res->result);
+  }
+
+  AstNode *node = newIdentifierNode(sym->dataType, varName, buffer, p->table);
+  return node;
+}
+
 AstNode *varDecleration(Parser *p) {
   Token *tkn = p->current;
 
   if (tkn->type != TOKEN_IDEN) {
-    printf("%s:%d:Error: Expected identifier, got %s \n", p->lex->filename,
-           p->lex->line, tokenNames[tkn->type]);
+    printParseError(p, "expected identifier, got %s \n", tokenNames[tkn->type]);
     exit(EXIT_FAILURE);
   }
 
+  // consumes the name of the variable
   char *varName = strdup(tkn->value);
+  if (isKeyword(varName)) {
+    printParseError(p, "cannot use keyword as variable \"%s\" is a keyword\n",
+                    varName);
+    free(varName);
+    exit(EXIT_FAILURE);
+  }
   consume(TOKEN_IDEN, p);
 
+  // consumes :
   consume(TOKEN_COLON, p);
 
-  // type of the variable
-  if (p->current->type != TOKEN_IDEN) {
-    printParseError(p, "Expected type, got %s \n",
-                    tokenNames[p->current->type]);
-    exit(EXIT_FAILURE);
-  }
-
+  // consumes the variable type
   Token *typeToken = p->current;
+  if (!checkValidType(typeToken)) {
+    printParseError(p, "unknown type parameter %s\n", typeToken->value);
+    exit(EXIT_FAILURE);
+  };
   consume(TOKEN_IDEN, p);
 
+  // consumes the =
   consume(TOKEN_ASSIGN, p);
-  if (p->current->type == TOKEN_NUMBER) {
-    if (strcmp(typeToken->value, getType(p)) != 0) {
-      printParseError(p, "expected type %s but got number\n", typeToken->value);
-      free(typeToken);
-      exit(EXIT_FAILURE);
-    }
-    AstNode *valueNode = logical(p);
-    Result *res = EvalAst(valueNode);
-    char buffer[1024];
-    sprintf(buffer, "%lf", *(double *)res->result);
 
-    AstNode *identifierNode =
-        newIdentifierNode("number", varName, buffer, p->table);
-    return identifierNode;
+  // handles var decleration and assignments
+  switch (p->current->type) {
+  case TOKEN_NUMBER:
+    return handleNumberIdentifiers(p, typeToken, varName);
+  case TOKEN_STRING:
+    return handleStringIdentifiers(p, typeToken, varName);
+  case TOKEN_IDEN:
+    return handleIdenIdentifiers(p, typeToken, varName);
+  default:
+    printParseError(p, "unexpected token %s\n", tokenNames[p->current->type]);
+    exit(EXIT_FAILURE);
   }
-
-  if (p->current->type == TOKEN_STRING) {
-
-    if (strcmp(typeToken->value, getType(p)) != 0) {
-      printParseError(p, "expected type %s but got string\n", typeToken->value);
-      free(typeToken);
-      exit(EXIT_FAILURE);
-    }
-
-    AstNode *node =
-        newIdentifierNode("string", varName, p->current->value, p->table);
-    advanceParser(p);
-    return node;
-  }
-
-  if (p->current->type == TOKEN_IDEN) {
-    Symbol *sym = lookupSymbol(p->table, p->current->value);
-    if (strcmp(sym->dataType, typeToken->value) != 0) {
-      printParseError(p, "cannot assign type %s to type %s\n", sym->dataType,
-                      typeToken->value);
-      exit(EXIT_FAILURE);
-    }
-    if (sym == NULL) {
-      printParseError(p, "Variable %s used before declaration\n",
-                      p->current->value);
-      exit(EXIT_FAILURE);
-    }
-
-    // Parse the expression involving the identifier
-    AstNode *valueNode = logical(p);
-
-    // Evaluate the expression and store the result
-    char buffer[1024];
-
-    Result *res = EvalAst(valueNode);
-    if (res->NodeType == NODE_NUMBER) {
-      sprintf(buffer, "%lf", *(double *)res->result);
-    } else if (res->NodeType == NODE_STRING_LITERAL) {
-      strcpy(buffer, (char *)res->result);
-    }
-
-    AstNode *node = newIdentifierNode(sym->dataType, varName, buffer, p->table);
-    return node;
-  }
-  printParseError(p, "unexpected token %s\n", tokenNames[p->current->type]);
-  exit(EXIT_FAILURE);
 }
