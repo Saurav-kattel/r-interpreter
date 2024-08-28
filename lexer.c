@@ -29,8 +29,7 @@ Token *NewToken(TokenType type, char *value) {
   return tkn;
 }
 
-int isAtEnd(Lexer *l) { return l->curr >= strlen(l->source); }
-
+int isAtEnd(Lexer *l) { return l->source[l->curr] == '\0'; }
 char advance(Lexer *l) {
   if (!isAtEnd(l)) {
     char ch = l->source[l->curr];

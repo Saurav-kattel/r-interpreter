@@ -40,7 +40,7 @@ enum {
 
 static const char *tokenNames[] = {
     // literals
-    "TOKEN_STIRNG",
+    "TOKEN_STRING",
     "TOKEN_NUMBER",
     "TOKEN_IDEN",
     // symbols

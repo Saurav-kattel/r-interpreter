@@ -55,8 +55,8 @@ int main(int argc, char **argv) {
   while (p->current->type != TOKEN_EOF) {
     AstNode *ast = parseAst(p);
     if (ast->type != NODE_STRING_LITERAL && ast->type != NODE_IDENTIFIER) {
-      double result = EvalAst(ast);
-      printf("\n %.3lf\n", result);
+      Result *result = EvalAst(ast);
+      printf("\n %.3lf\n", result->result);
     } else if (ast->type == NODE_STRING_LITERAL) {
       printf("\n%s\n", ast->stringLiteral.value);
     } else if (ast->type == NODE_IDENTIFIER) {
