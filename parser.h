@@ -17,6 +17,7 @@ enum {
   NODE_NUMBER,
   NODE_STRING_LITERAL,
   NODE_IDENTIFIER,
+  NODE_IDENTIFIER_ACCESS,
   NODE_UNARY_OP,
   NODE_BLOCK,
   NODE_IF_ELSE,
@@ -53,6 +54,7 @@ typedef struct AstNode {
       char *type;
       char *value;
       SymbolTable *table;
+      int isDeceleration;
     } identifier;
 
     struct {

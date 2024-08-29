@@ -1,3 +1,4 @@
+#include "interpreter.h"
 #include "lexer.h"
 #include "parser.h"
 #include "symbol.h"
@@ -71,7 +72,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
     if (right->NodeType == NODE_NUMBER) {
       double rightVal = *(double *)(right->result);
-
       switch (node->unaryOp.op) {
       case TOKEN_NOT:
         return newResult(&(double){!rightVal}, NODE_NUMBER);
@@ -85,38 +85,35 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
   }
 
-  case NODE_IDENTIFIER: {
-    SymbolTableEntry *sym =
-        lookupSymbol(node->identifier.table, node->identifier.name);
-    if (sym == NULL) {
-      printf("Error: Variable '%s' not found\n", node->identifier.name);
-      exit(EXIT_FAILURE);
-    }
-
-    if (strcmp(sym->type, "number") == 0) {
-      return newResult(&(double){convertStrToDouble(sym->value)}, NODE_NUMBER);
-    } else if (strcmp(sym->type, "string") == 0) {
-      return newResult(sym->value, NODE_STRING_LITERAL);
+  case NODE_IDENTIFIER_ACCESS: {
+    if (strcmp(node->identifier.type, "number") == 0) {
+      return newResult(&(double){convertStrToDouble(node->identifier.value)},
+                       NODE_NUMBER);
+    } else if (strcmp(node->identifier.type, "string") == 0) {
+      return newResult(strdup(node->identifier.value),
+                       NODE_STRING_LITERAL); // Duplicate string value
     }
   }
-
+  case NODE_IDENTIFIER: {
+    //  insertSymbol(p->table, node->identifier.name, node->identifier.type,
+    //        node->identifier.value);
+    return newResult(NULL, NODE_IDENTIFIER);
+  }
   case NODE_STRING_LITERAL: {
-    char *str =
-        strdup(node->stringLiteral.value); // Make sure to duplicate the string
+    char *str = strdup(node->stringLiteral.value); // Duplicate string literal
     return newResult(str, NODE_STRING_LITERAL);
   }
 
   case NODE_BLOCK: {
-    Result *res;
     for (int i = 0; i < node->block.statementCount; i++) {
-      res = EvalAst(node->block.statements[i], p);
-    }
-    return res;
-  } // Retu
-  break;
+      AstNode *ast = node->block.statements[i];
+      EvalAst(ast, p);
+    };
+    return NULL;
+  }
+
   case NODE_IF_ELSE: {
     Result *conditionResult = EvalAst(node->ifElseBlock.condition, p);
-
     if (conditionResult->NodeType != NODE_NUMBER) {
       printf("Error: Condition in if-else must be a number (interpreted as "
              "boolean)\n");
@@ -127,16 +124,25 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
     if (conditionValue) {
       // If condition is true (non-zero), execute ifBlock
-      return EvalAst(node->ifElseBlock.ifBlock, p);
+      Result *val = EvalAst(node->ifElseBlock.ifBlock, p);
+      if (val) {
+        free(val->result);
+        free(val);
+      }
+      return val;
     } else if (node->ifElseBlock.elseBlock != NULL) {
-      // If condition is false and there is an elseBlock, execute elseBlock
-      return EvalAst(node->ifElseBlock.elseBlock, p);
+      Result *val = EvalAst(node->ifElseBlock.elseBlock, p);
+      if (val) {
+        free(val->result);
+        free(val);
+      }
+      return val;
     }
-    return NULL; // No elseBlock and condition was false
+    break;
   }
 
   default:
-    printf("he");
+    printf("Error: Unexpected node type\n");
     exit(EXIT_FAILURE);
   }
 
@@ -149,13 +155,18 @@ void freeAst(AstNode *node) {
     freeAst(node->binaryOp.right);
   } else if (node->type == NODE_UNARY_OP) {
     freeAst(node->unaryOp.right);
+  } else if (node->type == NODE_STRING_LITERAL) {
+    free(node->stringLiteral.value);
+  } else if (node->type == NODE_IDENTIFIER) {
+    // Do not free identifier.name or symbol.value here if they are managed
+    // elsewhere
   }
   free(node);
 }
 
 AstNode *parseAst(Parser *p) {
-
   if (parserIsAtEnd(p)) {
+
     return NULL; // No more tokens to parse
   }
 

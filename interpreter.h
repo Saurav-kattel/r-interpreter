@@ -6,4 +6,5 @@
 Result *EvalAst(AstNode *, Parser *);
 void freeAst(AstNode *);
 AstNode *parseAst(Parser *p);
+void printSymbolTable(SymbolTable *);
 #endif // INTERPRETER_H_

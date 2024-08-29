@@ -57,7 +57,9 @@ int main(int argc, char **argv) {
     if (ast) {
       if (ast->type != NODE_STRING_LITERAL && ast->type != NODE_IDENTIFIER) {
         Result *result = EvalAst(ast, p);
-        printf("\n %.3lf\n", *(double *)result->result);
+        if (result) {
+          printf("\n %.3lf\n", *(double *)result->result);
+        }
       } else if (ast->type == NODE_STRING_LITERAL) {
         printf("\n%s\n", ast->stringLiteral.value);
       } else if (ast->type == NODE_IDENTIFIER) {
@@ -65,6 +67,7 @@ int main(int argc, char **argv) {
                ast->identifier.value, ast->identifier.type);
       }
     }
+    printSymbolTable(p->table);
     freeAst(ast);
   }
 
