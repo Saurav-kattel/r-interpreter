@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 void printSymbolTable(SymbolTable *table) {
   printf("\n\nSymbol Table:\n");
@@ -52,6 +53,7 @@ void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value) {
   table->entries[table->size].symbol = strdup(symbol);
   table->entries[table->size].type = strdup(type);
   table->entries[table->size].value = strdup(value);
+
   table->entries[table->size].scope =
       table->currentScope; // Set the scope of the new symbol
   table->size++;
@@ -88,4 +90,20 @@ void exitScope(SymbolTable *table) {
   }
 
   table->currentScope--;
+}
+
+void updateSymbolTableValue(SymbolTable *table, char *varName, char *value,
+                            char *type) {
+
+  SymbolTableEntry *sym = lookupSymbol(table, varName);
+  if (strcmp(sym->type, type) != 0) {
+    printf("cannot assing type of %s to type of %s\n", type, sym->type);
+    exit(EXIT_FAILURE);
+  }
+
+  if (!sym) {
+    printf("variable %s not found \n", varName);
+    exit(EXIT_FAILURE);
+  }
+  sym->value = strdup(value);
 }

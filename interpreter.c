@@ -20,7 +20,6 @@ static double convertStrToDouble(char *s) {
 }
 
 Result *EvalAst(AstNode *node, Parser *p) {
-  printf("%d\n", node->type);
   switch (node->type) {
   case NODE_NUMBER:
     return newResult(&node->number, NODE_NUMBER);
@@ -70,7 +69,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
   case NODE_UNARY_OP: {
     Result *right = EvalAst(node->unaryOp.right, p);
-
     if (right->NodeType == NODE_NUMBER) {
       double rightVal = *(double *)(right->result);
       switch (node->unaryOp.op) {
@@ -86,6 +84,12 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
   }
 
+  case NODE_IDENTIFIER_MUTATION: {
+    updateSymbolTableValue(p->table, node->identifier.name,
+                           node->identifier.value, node->identifier.type);
+
+    break;
+  }
   case NODE_IDENTIFIER_ASSIGNMENT: {
     SymbolTableEntry *var = lookupSymbol(p->table, node->identifier.name);
     if (!var) {
@@ -113,13 +117,11 @@ Result *EvalAst(AstNode *node, Parser *p) {
   }
 
   case NODE_BLOCK: {
-
     for (int i = 0; i < node->block.statementCount; i++) {
       AstNode *ast = node->block.statements[i];
       EvalAst(ast, p);
     };
     exitScope(p->table);
-
     return NULL;
   }
 

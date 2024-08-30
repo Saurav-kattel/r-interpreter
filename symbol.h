@@ -93,7 +93,8 @@ void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value);
 SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol);
 
 void enterScope(SymbolTable *table);
-
+void updateSymbolTableValue(SymbolTable *table, char *varName, char *value,
+                            char *type);
 void exitScope(SymbolTable *table);
 
 #endif // SYMBOL_H_

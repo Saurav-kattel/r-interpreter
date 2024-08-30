@@ -180,49 +180,38 @@ AstNode *newIfElseNode(AstNode *condition, AstNode *ifBlock,
   return node;
 }
 
-AstNode *newIdentifierNode(char *type, char *name, char *value,
-                           SymbolTable *table) {
+AstNode *newIdentifierNode(char *type, char *name, char *value, Parser *p,
+                           int nodeType) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
     printf("unable to allocate new ast node\n");
     exit(EXIT_FAILURE);
   }
 
-  if (lookupSymbol(table, name) == NULL) {
-    insertSymbol(table, name, type, value);
-  } else {
-    printf("cannot redeclare %s is already decleared \n", name);
+  if (lookupSymbol(p->table, name) == NULL) {
+    if (value == NULL) {
+      insertSymbol(p->table, name, type, "");
+    } else {
+      insertSymbol(p->table, name, type, value);
+    }
+  } else if (nodeType != NODE_IDENTIFIER_MUTATION) {
+    printParseError(p, "cannot redecleare %s is already decleared", name);
     exit(EXIT_FAILURE);
   }
+  int isDeceleration = 0;
+  if (nodeType == NODE_IDENTIFIER_DECLERATION) {
+    isDeceleration = 1;
+  }
 
-  node->type = NODE_IDENTIFIER_ASSIGNMENT;
-  node->identifier.value = strdup(value);
+  node->type = nodeType;
+
+  if (value != NULL) {
+    node->identifier.value = strdup(value);
+  }
   node->identifier.type = strdup(type);
   node->identifier.name = strdup(name);
-  node->identifier.table = table;
-  node->identifier.isDeceleration = 0;
-  return node;
-}
-
-AstNode *newIdentifierDeclerationNode(char *type, char *name,
-                                      SymbolTable *table) {
-  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
-  if (!node) {
-    printf("unable to allocate new ast node\n");
-    exit(EXIT_FAILURE);
-  }
-
-  if (lookupSymbol(table, name) == NULL) {
-    insertSymbol(table, name, type, NULL);
-  } else {
-    printf("cannot redeclare %s is already decleared \n", name);
-    exit(EXIT_FAILURE);
-  }
-
-  node->identifier.type = strdup(type);
-  node->identifier.name = strdup(name);
-  node->identifier.table = table;
-  node->identifier.isDeceleration = 1;
+  node->identifier.table = p->table;
+  node->identifier.isDeceleration = isDeceleration;
   return node;
 }
 
@@ -389,6 +378,7 @@ AstNode *relational(Parser *p) {
 
   return node;
 }
+
 AstNode *logical(Parser *p) {
   AstNode *node = unary(p);
   while (p->current &&
@@ -411,12 +401,17 @@ AstNode *unary(Parser *p) {
   return relational(p);
 }
 
-AstNode *handleNumberIdentifiers(Parser *p, Token *typeToken, char *varName) {
-  if (strcmp(typeToken->value, getType(p)) != 0) {
-    printParseError(p, "expected type %s but got number\n", typeToken->value);
-    free(typeToken);
-    exit(EXIT_FAILURE);
+AstNode *handleNumberIdentifiers(Parser *p, Token *typeToken, char *varName,
+                                 int nodeType) {
+  if (nodeType != NODE_IDENTIFIER_MUTATION) {
+
+    if (strcmp(typeToken->value, getType(p)) != 0) {
+      printParseError(p, "expected type %s but got number\n", typeToken->value);
+      free(typeToken);
+      exit(EXIT_FAILURE);
+    }
   }
+
   AstNode *valueNode = logical(p);
   Result *res = EvalAst(valueNode, p);
 
@@ -424,24 +419,28 @@ AstNode *handleNumberIdentifiers(Parser *p, Token *typeToken, char *varName) {
   sprintf(buffer, "%lf", *(double *)res->result);
 
   AstNode *identifierNode =
-      newIdentifierNode("number", varName, buffer, p->table);
+      newIdentifierNode("number", varName, buffer, p, nodeType);
   return identifierNode;
 }
 
-AstNode *handleStringIdentifiers(Parser *p, Token *typeToken, char *varName) {
-  if (strcmp(typeToken->value, getType(p)) != 0) {
-    printParseError(p, "expected type %s but got string\n", typeToken->value);
-    free(typeToken);
-    exit(EXIT_FAILURE);
+AstNode *handleStringIdentifiers(Parser *p, Token *typeToken, char *varName,
+                                 int nodeType) {
+  if (nodeType != NODE_IDENTIFIER_MUTATION) {
+    if (strcmp(typeToken->value, getType(p)) != 0) {
+      printParseError(p, "expected type %s but got string\n", typeToken->value);
+      free(typeToken);
+      exit(EXIT_FAILURE);
+    }
   }
 
   AstNode *node =
-      newIdentifierNode("string", varName, p->current->value, p->table);
+      newIdentifierNode("string", varName, p->current->value, p, nodeType);
   advanceParser(p);
   return node;
 }
 
-AstNode *handleIdenIdentifiers(Parser *p, Token *typeToken, char *varName) {
+AstNode *handleIdenIdentifiers(Parser *p, Token *typeToken, char *varName,
+                               int nodeType) {
 
   SymbolTableEntry *sym = lookupSymbol(p->table, p->current->value);
   if (sym == NULL) {
@@ -475,7 +474,7 @@ AstNode *handleIdenIdentifiers(Parser *p, Token *typeToken, char *varName) {
     strcpy(buffer, (char *)res->result);
   }
 
-  AstNode *node = newIdentifierNode(sym->type, varName, buffer, p->table);
+  AstNode *node = newIdentifierNode(sym->type, varName, buffer, p, nodeType);
   return node;
 }
 
@@ -496,7 +495,35 @@ AstNode *varDecleration(Parser *p) {
     exit(EXIT_FAILURE);
   }
   consume(TOKEN_IDEN, p);
+  SymbolTableEntry *sym = lookupSymbol(p->table, varName);
+  if (sym != NULL && p->current->type == TOKEN_ASSIGN) {
+    consume(TOKEN_ASSIGN, p);
+    switch (p->current->type) {
+    case TOKEN_NUMBER: {
 
+      Token newToken = {.type = TOKEN_NUMBER,
+                        .value = *strdup(p->current->value)};
+      return handleNumberIdentifiers(p, &newToken, sym->symbol,
+                                     NODE_IDENTIFIER_MUTATION);
+    }
+
+    case TOKEN_STRING: {
+      Token newToken = {.type = TOKEN_STRING,
+                        .value = *strdup(p->current->value)};
+
+      return handleStringIdentifiers(p, p->current, varName,
+                                     NODE_IDENTIFIER_MUTATION);
+    }
+    case TOKEN_IDEN: {
+      return handleIdenIdentifiers(p, p->current, varName,
+                                   NODE_IDENTIFIER_MUTATION);
+    }
+    default:
+      printParseError(p, "unknown token %s", tokenNames[p->current->type]);
+      exit(EXIT_FAILURE);
+      break;
+    }
+  }
   // consumes :
   consume(TOKEN_COLON, p);
 
@@ -510,7 +537,8 @@ AstNode *varDecleration(Parser *p) {
 
   if (p->current->type == TOKEN_SEMI_COLON) {
     Token *tkn = p->current;
-    return newIdentifierDeclerationNode(varName, typeToken->value, p->table);
+    return newIdentifierNode(typeToken->value, varName, NULL, p,
+                             NODE_IDENTIFIER_DECLERATION);
   }
   // consumes the =
   consume(TOKEN_ASSIGN, p);
@@ -518,15 +546,33 @@ AstNode *varDecleration(Parser *p) {
   // handles var decleration and assignments
   switch (p->current->type) {
   case TOKEN_NUMBER:
-    return handleNumberIdentifiers(p, typeToken, varName);
+    return handleNumberIdentifiers(p, typeToken, varName,
+                                   NODE_IDENTIFIER_ASSIGNMENT);
   case TOKEN_STRING:
-    return handleStringIdentifiers(p, typeToken, varName);
+    return handleStringIdentifiers(p, typeToken, varName,
+                                   NODE_IDENTIFIER_ASSIGNMENT);
   case TOKEN_IDEN:
-    return handleIdenIdentifiers(p, typeToken, varName);
+    return handleIdenIdentifiers(p, typeToken, varName,
+                                 NODE_IDENTIFIER_ASSIGNMENT);
   default:
     printParseError(p, "unexpected token %s\n", tokenNames[p->current->type]);
     exit(EXIT_FAILURE);
   }
+}
+
+void addStatementToBlock(AstNode *blockNode, AstNode *statement) {
+  if (blockNode->type != NODE_BLOCK) {
+    printf("Error: Attempting to add a statement to a non-block node.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // Allocate or reallocate memory for the new statement
+  blockNode->block.statements =
+      realloc(blockNode->block.statements,
+              (blockNode->block.statementCount + 1) * sizeof(AstNode *));
+
+  // Add the statement to the block
+  blockNode->block.statements[blockNode->block.statementCount++] = statement;
 }
 
 AstNode *parseBlockStmt(Parser *p) {
@@ -553,18 +599,10 @@ AstNode *parseBlockStmt(Parser *p) {
   enterScope(p->table);
   while (p->current->type != TOKEN_RCURLY && !parserIsAtEnd(p)) {
     AstNode *stmt = parseAst(p);
-    blockNode->block.statements =
-        realloc(blockNode->block.statements,
-                sizeof(AstNode *) * (blockNode->block.statementCount + 1));
-    if (!blockNode->block.statements) {
-      printf("unable to allocate memory for block statements\n");
-      exit(EXIT_FAILURE);
-    }
-    blockNode->block.statements[blockNode->block.statementCount++] = stmt;
+    addStatementToBlock(blockNode, stmt);
   }
 
   consume(TOKEN_RCURLY, p);
-
   return blockNode;
 }
 
