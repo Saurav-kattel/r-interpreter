@@ -55,19 +55,22 @@ int main(int argc, char **argv) {
   while (p->current->type != TOKEN_EOF) {
     AstNode *ast = parseAst(p);
     if (ast) {
-      if (ast->type != NODE_STRING_LITERAL && ast->type != NODE_IDENTIFIER) {
+      if (ast->type != NODE_STRING_LITERAL &&
+          ast->type != NODE_IDENTIFIER_ASSIGNMENT &&
+          NODE_IDENTIFIER_DECLERATION) {
         Result *result = EvalAst(ast, p);
         if (result) {
           printf("\n %.3lf\n", *(double *)result->result);
         }
       } else if (ast->type == NODE_STRING_LITERAL) {
         printf("\n%s\n", ast->stringLiteral.value);
-      } else if (ast->type == NODE_IDENTIFIER) {
+      } else if (ast->type == NODE_IDENTIFIER_ASSIGNMENT) {
         printf("\n<name: %s| value: %s| type:%s>\n\n", ast->identifier.name,
                ast->identifier.value, ast->identifier.type);
       }
     }
     printSymbolTable(p->table);
+
     freeAst(ast);
   }
 

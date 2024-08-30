@@ -20,6 +20,7 @@ static double convertStrToDouble(char *s) {
 }
 
 Result *EvalAst(AstNode *node, Parser *p) {
+  printf("%d\n", node->type);
   switch (node->type) {
   case NODE_NUMBER:
     return newResult(&node->number, NODE_NUMBER);
@@ -85,7 +86,12 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
   }
 
-  case NODE_IDENTIFIER_ACCESS: {
+  case NODE_IDENTIFIER_ASSIGNMENT: {
+    SymbolTableEntry *var = lookupSymbol(p->table, node->identifier.name);
+    if (!var) {
+      printf("%s is not decleared\n", node->identifier.name);
+      exit(EXIT_FAILURE);
+    }
     if (strcmp(node->identifier.type, "number") == 0) {
       return newResult(&(double){convertStrToDouble(node->identifier.value)},
                        NODE_NUMBER);
@@ -93,22 +99,27 @@ Result *EvalAst(AstNode *node, Parser *p) {
       return newResult(strdup(node->identifier.value),
                        NODE_STRING_LITERAL); // Duplicate string value
     }
+    break;
   }
-  case NODE_IDENTIFIER: {
-    //  insertSymbol(p->table, node->identifier.name, node->identifier.type,
-    //        node->identifier.value);
-    return newResult(NULL, NODE_IDENTIFIER);
+
+  case NODE_IDENTIFIER_DECLERATION: {
+    printf("wh\n");
+    break;
   }
+
   case NODE_STRING_LITERAL: {
-    char *str = strdup(node->stringLiteral.value); // Duplicate string literal
+    char *str = strdup(node->stringLiteral.value);
     return newResult(str, NODE_STRING_LITERAL);
   }
 
   case NODE_BLOCK: {
+
     for (int i = 0; i < node->block.statementCount; i++) {
       AstNode *ast = node->block.statements[i];
       EvalAst(ast, p);
     };
+    exitScope(p->table);
+
     return NULL;
   }
 
@@ -142,7 +153,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
   }
 
   default:
-    printf("Error: Unexpected node type\n");
+    printf("Error: Unexpected node type %s\n", node->type);
     exit(EXIT_FAILURE);
   }
 
@@ -157,7 +168,7 @@ void freeAst(AstNode *node) {
     freeAst(node->unaryOp.right);
   } else if (node->type == NODE_STRING_LITERAL) {
     free(node->stringLiteral.value);
-  } else if (node->type == NODE_IDENTIFIER) {
+  } else if (node->type == NODE_IDENTIFIER_ASSIGNMENT) {
     // Do not free identifier.name or symbol.value here if they are managed
     // elsewhere
   }

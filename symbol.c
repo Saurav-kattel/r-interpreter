@@ -48,9 +48,10 @@ void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value) {
     table->entries = (SymbolTableEntry *)realloc(
         table->entries, table->capacity * sizeof(SymbolTableEntry));
   }
+
   table->entries[table->size].symbol = strdup(symbol);
   table->entries[table->size].type = strdup(type);
-  table->entries[table->size].value = value;
+  table->entries[table->size].value = strdup(value);
   table->entries[table->size].scope =
       table->currentScope; // Set the scope of the new symbol
   table->size++;
@@ -64,7 +65,6 @@ SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol) {
     int symbolMatches = strcmp(table->entries[i].symbol, symbol) == 0;
     int inScope = table->entries[i].scope <= table->currentScope;
     if (symbolMatches && inScope) {
-      printf("matched %s\n", table->entries[i].symbol);
       return &table->entries[i];
     }
   }
@@ -74,12 +74,9 @@ SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol) {
 // Function to enter a new scope
 void enterScope(SymbolTable *table) { table->currentScope++; }
 
-// Function to exit the current scope and remove all symbols declared in this
-// scope
 void exitScope(SymbolTable *table) {
 
-  /*int i = table->size - 1;
-
+  int i = table->size - 1;
   while (i >= 0) {
     if (table->entries[i].scope == table->currentScope) {
       for (int j = i; j < table->size - 1; j++) {
@@ -89,6 +86,6 @@ void exitScope(SymbolTable *table) {
     }
     i--;
   }
-  */
+
   table->currentScope--;
 }

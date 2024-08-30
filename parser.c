@@ -181,7 +181,7 @@ AstNode *newIfElseNode(AstNode *condition, AstNode *ifBlock,
 }
 
 AstNode *newIdentifierNode(char *type, char *name, char *value,
-                           SymbolTable *table, int nodeType) {
+                           SymbolTable *table) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
     printf("unable to allocate new ast node\n");
@@ -195,13 +195,34 @@ AstNode *newIdentifierNode(char *type, char *name, char *value,
     exit(EXIT_FAILURE);
   }
 
-  node->type = nodeType;
+  node->type = NODE_IDENTIFIER_ASSIGNMENT;
   node->identifier.value = strdup(value);
   node->identifier.type = strdup(type);
   node->identifier.name = strdup(name);
   node->identifier.table = table;
-  node->identifier.isDeceleration = 1;
+  node->identifier.isDeceleration = 0;
+  return node;
+}
 
+AstNode *newIdentifierDeclerationNode(char *type, char *name,
+                                      SymbolTable *table) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (lookupSymbol(table, name) == NULL) {
+    insertSymbol(table, name, type, NULL);
+  } else {
+    printf("cannot redeclare %s is already decleared \n", name);
+    exit(EXIT_FAILURE);
+  }
+
+  node->identifier.type = strdup(type);
+  node->identifier.name = strdup(name);
+  node->identifier.table = table;
+  node->identifier.isDeceleration = 1;
   return node;
 }
 
@@ -403,7 +424,7 @@ AstNode *handleNumberIdentifiers(Parser *p, Token *typeToken, char *varName) {
   sprintf(buffer, "%lf", *(double *)res->result);
 
   AstNode *identifierNode =
-      newIdentifierNode("number", varName, buffer, p->table, NODE_IDENTIFIER);
+      newIdentifierNode("number", varName, buffer, p->table);
   return identifierNode;
 }
 
@@ -414,8 +435,8 @@ AstNode *handleStringIdentifiers(Parser *p, Token *typeToken, char *varName) {
     exit(EXIT_FAILURE);
   }
 
-  AstNode *node = newIdentifierNode("string", varName, p->current->value,
-                                    p->table, NODE_IDENTIFIER);
+  AstNode *node =
+      newIdentifierNode("string", varName, p->current->value, p->table);
   advanceParser(p);
   return node;
 }
@@ -454,8 +475,7 @@ AstNode *handleIdenIdentifiers(Parser *p, Token *typeToken, char *varName) {
     strcpy(buffer, (char *)res->result);
   }
 
-  AstNode *node = newIdentifierNode(sym->type, varName, buffer, p->table,
-                                    NODE_IDENTIFIER_ACCESS);
+  AstNode *node = newIdentifierNode(sym->type, varName, buffer, p->table);
   return node;
 }
 
@@ -488,6 +508,10 @@ AstNode *varDecleration(Parser *p) {
   };
   consume(TOKEN_IDEN, p);
 
+  if (p->current->type == TOKEN_SEMI_COLON) {
+    Token *tkn = p->current;
+    return newIdentifierDeclerationNode(varName, typeToken->value, p->table);
+  }
   // consumes the =
   consume(TOKEN_ASSIGN, p);
 
@@ -526,11 +550,9 @@ AstNode *parseBlockStmt(Parser *p) {
   blockNode->type = NODE_BLOCK;
   blockNode->block.statements = NULL;
   blockNode->block.statementCount = 0;
-
   enterScope(p->table);
   while (p->current->type != TOKEN_RCURLY && !parserIsAtEnd(p)) {
     AstNode *stmt = parseAst(p);
-    printf("stmt type is = %d\n", stmt->type);
     blockNode->block.statements =
         realloc(blockNode->block.statements,
                 sizeof(AstNode *) * (blockNode->block.statementCount + 1));
@@ -542,7 +564,7 @@ AstNode *parseBlockStmt(Parser *p) {
   }
 
   consume(TOKEN_RCURLY, p);
-  exitScope(p->table);
+
   return blockNode;
 }
 
