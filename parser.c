@@ -1,5 +1,6 @@
 
 #include "parser.h"
+#include "common.h"
 #include "interpreter.h"
 #include "lexer.h"
 #include "symbol.h"
@@ -10,6 +11,7 @@
 #include <string.h>
 #include <time.h>
 
+// initializing the parser
 Parser *InitParser(Lexer *lex, SymbolTable *table) {
   Parser *p = (Parser *)malloc(sizeof(Parser));
   if (p == NULL) {
@@ -37,6 +39,7 @@ Token *advanceParser(Parser *p) {
   return p->current;
 }
 
+// to look ate the next occuring token
 Token *parserPeek(Parser *p) {
   if (!parserIsAtEnd(p)) {
     return GetNextToken(p->lex);
@@ -44,6 +47,7 @@ Token *parserPeek(Parser *p) {
   return NULL;
 }
 
+// to look at the the 2nd positon from the current parser positon
 Token *parserPeekNext(Parser *p) {
   if (!parserIsAtEnd(p)) {
     Token *tmp = GetNextToken(p->lex);
@@ -53,6 +57,7 @@ Token *parserPeekNext(Parser *p) {
   return NULL;
 }
 
+// checks the type and advances the parser
 void consume(TokenType type, Parser *p) {
   if (p->current->type != type) {
     printParseError(p, "unexpected token  %s expected %s\n",
@@ -63,6 +68,7 @@ void consume(TokenType type, Parser *p) {
   advanceParser(p);
 }
 
+// return type based on the token type
 static char *getType(Parser *p) {
   switch (p->current->type) {
   case TOKEN_NUMBER:
@@ -74,6 +80,7 @@ static char *getType(Parser *p) {
   }
 }
 
+// to print the error location
 void printContext(Parser *p) {
   // Find the start of the current line
   int start = p->lex->curr;
@@ -151,7 +158,6 @@ static double convertStrToDouble(char *s) {
 }
 
 int checkValidType(Token *typeToken) {
-
   int arraySize = 2;
   const char *types[] = {"number", "string"};
 
@@ -165,6 +171,8 @@ int checkValidType(Token *typeToken) {
 
 // -------------------------for parsing ast -----------------------
 //
+
+// parses the if else block into ast
 
 AstNode *newIfElseNode(AstNode *condition, AstNode *ifBlock,
                        AstNode *elseBlock) {
@@ -180,6 +188,7 @@ AstNode *newIfElseNode(AstNode *condition, AstNode *ifBlock,
   return node;
 }
 
+// returns the identifier ast from the provided argumentes
 AstNode *newIdentifierNode(char *type, char *name, AstNode *value, Parser *p,
                            int nodeType) {
 
@@ -208,6 +217,7 @@ AstNode *newIdentifierNode(char *type, char *name, AstNode *value, Parser *p,
   return node;
 }
 
+// returns the binary ast from the provided argumentes
 AstNode *newBinaryNode(TokenType op, AstNode *left, AstNode *right) {
 
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
@@ -222,7 +232,7 @@ AstNode *newBinaryNode(TokenType op, AstNode *left, AstNode *right) {
   node->binaryOp.right = right;
   return node;
 }
-
+// returns the number ast from the provided argumentes
 AstNode *newNumberNode(double value) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
@@ -233,6 +243,7 @@ AstNode *newNumberNode(double value) {
   node->number = value;
   return node;
 }
+// returns the unary ast from the provided argumentes
 
 AstNode *newUnaryNode(TokenType type, AstNode *right) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
@@ -247,6 +258,8 @@ AstNode *newUnaryNode(TokenType type, AstNode *right) {
   return node;
 }
 
+// returns the string ast from the provided argumentes
+
 AstNode *newStringNode(char *value) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
@@ -260,8 +273,9 @@ AstNode *newStringNode(char *value) {
   return node;
 }
 
-AstNode *string(Parser *p) {
+// returns the string's ast after check and validating syntax and tokens
 
+AstNode *string(Parser *p) {
   if (p->current == NULL) {
     printf("token is NULL\n");
     exit(EXIT_FAILURE);
@@ -275,8 +289,8 @@ AstNode *string(Parser *p) {
   return NULL;
 }
 
+// builds the ast for arthemetic, relational and logical operations
 AstNode *term(Parser *p) {
-
   if (p->current == NULL) {
     printf("token is NULL\n");
     exit(EXIT_FAILURE);
@@ -333,6 +347,7 @@ AstNode *factor(Parser *p) {
     consume(TOKEN_RPAREN, p);
     return node;
   } else if (tkn->type == TOKEN_IDEN) {
+    // to parse the variable that was assigned as a value
     AstNode *node =
         newIdentifierNode("", tkn->value, NULL, p, NODE_IDENTIFIER_VALUE);
     consume(TOKEN_IDEN, p);
@@ -561,4 +576,83 @@ AstNode *ifElseParser(Parser *p) {
     elseBlock = parseBlockStmt(p);
   }
   return newIfElseNode(ast, ifBlock, elseBlock);
+}
+
+// ------------------------parsing functions-------------------------------
+
+AstNode *newFnParams(char *fnName, char *returnType, int paramsCount,
+                     AstNode **params, AstNode *fnBody) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("failed allocating memory for the ast\n");
+    exit(EXIT_FAILURE);
+  }
+  node->type = NODE_FUNCTION;
+  node->function.params = params;
+  node->function.returnType = strdup(returnType);
+  node->function.name = strdup(fnName);
+  node->function.body = fnBody;
+  return node;
+}
+
+AstNode *parseFnParams(Parser *p) {
+  if (p->current->type != TOKEN_IDEN) {
+    printParseError(p, "expcted %s but got %s in function paramteres",
+                    tokenNames[TOKEN_IDEN], tokenNames[p->current->type]);
+    exit(EXIT_FAILURE);
+  }
+  if (isKeyword(p->current->value)) {
+    printParseError(p, "cannot use  keyword %s as function parameters",
+                    p->current->value);
+    exit(EXIT_FAILURE);
+  }
+  char *paramName = strdup(p->current->value);
+  consume(TOKEN_IDEN, p);
+
+  consume(TOKEN_COLON, p);
+
+  char *paramType = strdup(p->current->value);
+  if (!checkValidType(p->current)) {
+    printParseError(p, "unknown type parameter %s", p->current->value);
+    exit(EXIT_FAILURE);
+  }
+  consume(TOKEN_IDEN, p);
+
+  if (p->current->type != TOKEN_RPAREN) {
+    consume(TOKEN_COMMA, p);
+
+    printf("%s\n", p->current->value);
+  }
+  return newIdentifierNode(paramType, paramName, NULL, p, NODE_FUNCTION_PARAM);
+}
+
+AstNode *parseFunction(Parser *p) {
+  if (p->current->type != TOKEN_FN || strcmp(p->current->value, "fn") != 0) {
+    printParseError(p, "error occured  expected fn but got %s\n",
+                    p->current->value);
+    exit(EXIT_FAILURE);
+  }
+  consume(TOKEN_FN, p);
+  char *fnName = p->current->value;
+  consume(TOKEN_IDEN, p);
+  consume(TOKEN_COLON, p);
+  char *returnType = p->current->value;
+  consume(TOKEN_IDEN, p);
+  consume(TOKEN_LPAREN, p);
+
+  int paramsSize = 2;
+  AstNode **params = (AstNode **)malloc(sizeof(AstNode *) * 2);
+  int paramsCount = 0;
+
+  while (p->current->type != TOKEN_RPAREN) {
+    if (paramsCount >= paramsSize) {
+      params = (AstNode **)realloc(params, paramsSize *= 2);
+    }
+    AstNode *ast = parseFnParams(p);
+    params[paramsCount++] = ast;
+  }
+
+  consume(TOKEN_RPAREN, p);
+  AstNode *fnBody = parseBlockStmt(p);
+  return newFnParams(fnName, returnType, paramsCount, params, fnBody);
 }

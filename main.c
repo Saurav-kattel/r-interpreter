@@ -1,4 +1,3 @@
-#if 1
 
 #include "interpreter.h"
 #include "lexer.h"
@@ -80,8 +79,8 @@ int main(int argc, char **argv) {
   prog->size = 0;
   prog->capacity = 10;
   prog->program = (AstNode **)malloc(sizeof(AstNode) * prog->capacity);
-
   while (p->current->type != TOKEN_EOF) {
+
     AstNode *ast = parseAst(p);
     if (ast) {
       addToProgram(ast, prog);
@@ -99,5 +98,3 @@ int main(int argc, char **argv) {
   free(file_content);
   return 0;
 }
-
-#endif

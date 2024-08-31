@@ -1,4 +1,5 @@
 #include "interpreter.h"
+#include "common.h"
 #include "lexer.h"
 #include "parser.h"
 #include "symbol.h"
@@ -45,7 +46,21 @@ Result *EvalAst(AstNode *node, Parser *p) {
   switch (node->type) {
   case NODE_NUMBER:
     return newResult(&node->number, NODE_NUMBER);
-
+  case NODE_FUNCTION_PARAM: {
+    for (int i = 0; i < node->function.paramsCount; i++) {
+      EvalAst(node->function.params[i], p);
+    }
+  }
+  case NODE_FUNCTION: {
+    SymbolTableEntry *sym = lookupFnSymbol(p->table, node->function.name);
+    if (sym) {
+      printParseError(p, "Funcion %s is already decelared",
+                      node->function.name);
+      exit(EXIT_FAILURE);
+    }
+    //   insertFnSymbol(SymbolTable *table, char *symbol, char *type, void
+    //   *value);
+  }
   case NODE_BINARY_OP: {
     Result *left = EvalAst(node->binaryOp.left, p);
     Result *right = EvalAst(node->binaryOp.right, p);
@@ -125,8 +140,10 @@ Result *EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
     Result *res = EvalAst(node->identifier.value, p);
+
     updateSymbolTableValue(p->table, node->identifier.name, res->result,
-                           node->identifier.type);
+                           var->type);
+
     break;
   }
 
@@ -245,6 +262,10 @@ AstNode *parseAst(Parser *p) {
     consume(TOKEN_SEMI_COLON, p);
     return ast;
   }
+  case TOKEN_FN: {
+    AstNode *ast = parseFunction(p);
+    return ast;
+  }
   case TOKEN_STRING: {
     AstNode *ast = string(p);
     consume(TOKEN_SEMI_COLON, p); // Assuming statements end with a semicolon
@@ -261,7 +282,6 @@ AstNode *parseAst(Parser *p) {
     return ifElseParser(p);
 
   case TOKEN_LCURLY: {
-    // Handle block statements
     AstNode *st = parseBlockStmt(p);
     return st;
   }

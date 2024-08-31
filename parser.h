@@ -1,8 +1,8 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include "common.h"
 #include "lexer.h"
-#include "symbol.h"
 
 #define RED "\033[31m"
 #define GREEN "\033[32m"
@@ -16,7 +16,8 @@ enum {
   NODE_BINARY_OP,
   NODE_NUMBER,
   NODE_STRING_LITERAL,
-
+  NODE_FUNCTION,
+  NODE_FUNCTION_PARAM,
   NODE_IDENTIFIER_VALUE,
   NODE_IDENTIFIER_DECLERATION,
   NODE_IDENTIFIER_ASSIGNMENT,
@@ -25,57 +26,6 @@ enum {
   NODE_BLOCK,
   NODE_IF_ELSE,
 };
-
-typedef struct Result {
-  int NodeType;
-  void *result;
-} Result;
-
-typedef struct {
-  Token *current;
-  Lexer *lex;
-  SymbolTable *table;
-} Parser;
-
-typedef struct AstNode {
-  int type;
-  double number;
-  union {
-    struct {
-      struct AstNode *left;
-      struct AstNode *right;
-      TokenType op;
-    } binaryOp;
-
-    struct {
-      struct AstNode *right;
-      TokenType op;
-    } unaryOp;
-
-    struct {
-      char *name;
-      char *type;
-      struct AstNode *value;
-      SymbolTable *table;
-      int isDeceleration;
-    } identifier;
-
-    struct {
-      struct AstNode **statements;
-      int statementCount;
-    } block;
-
-    struct {
-      struct AstNode *condition;
-      struct AstNode *ifBlock;
-      struct AstNode *elseBlock;
-    } ifElseBlock;
-
-    struct {
-      char *value;
-    } stringLiteral;
-  };
-} AstNode;
 
 // NECESSARY
 AstNode *expr(Parser *);
@@ -99,5 +49,6 @@ int checkValidType(Token *);
 int parserIsAtEnd(Parser *p);
 // MIGHT BE NEEDED
 AstNode *parseProgram(Parser *p, SymbolTable *table);
+AstNode *parseFunction(Parser *p);
 int isKeyword(char *);
 #endif // PRASER_H

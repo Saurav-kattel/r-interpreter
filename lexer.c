@@ -119,9 +119,7 @@ Token *GetNextToken(Lexer *l) {
     char *buffer = (char *)malloc(length + 1);
     for (int i = 0; i < length; i++) {
       buffer[i] = l->source[start + i];
-      // strcpy(buffer[i], l->source[start + i]);
     }
-    // strncpy(buffer, l->source + start, length);
     buffer[length] = '\0';
 
     Token *tkn = NewToken(TOKEN_STRING, buffer);
@@ -203,6 +201,10 @@ Token *GetNextToken(Lexer *l) {
       return NewToken(TOKEN_LCURLY, "{");
     }
     printf("unexpected token {\n");
+  }
+
+  if (c == ',') {
+    return NewToken(TOKEN_COMMA, ",");
   }
 
   if (c == '}') {

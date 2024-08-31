@@ -72,7 +72,16 @@ void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value) {
   table->size++;
 }
 
-// Function to lookup a symbol in the symbol table
+SymbolTableEntry *lookupFnSymbol(SymbolTable *table, char *symbol) {
+  for (int i = table->size - 1; i >= 0; i--) {
+    int symbolMatches = strcmp(table->entries[i].function.name, symbol) == 0;
+    int inScope = table->entries[i].scope <= table->currentScope;
+    if (symbolMatches && inScope) {
+      return &table->entries[i];
+    }
+  }
+  return NULL; // Symbol not found
+}
 
 // Function to lookup a symbol in the symbol table, considering scope
 SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol) {

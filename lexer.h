@@ -18,6 +18,7 @@ enum {
   TOKEN_EOF,
   TOKEN_COLON,
   TOKEN_ERR,
+  TOKEN_COMMA,
 
   // arthemetic
   TOKEN_PLUS,
@@ -60,6 +61,7 @@ static const char *tokenNames[] = {
     "EOF",
     ":",
     "ERR",
+    ",",
 
     // arthemetic
     "+",
