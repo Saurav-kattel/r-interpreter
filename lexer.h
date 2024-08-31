@@ -46,45 +46,45 @@ enum {
 
 static const char *tokenNames[] = {
     // literals
-    "TOKEN_STRING",
-    "TOKEN_NUMBER",
-    "TOKEN_IDEN",
+    "string",
+    "number",
+    "identifier",
     // symbols
-    "TOKEN_LPAREN",
-    "TOKEN_RPAREN",
-    "TOKEN_LCURLY",
-    "TOKEN_RCURLY",
-    "TOKEN_SEMI_COLON",
-    "TOKEN_ASSIGN",
-    "TOKEN_COMMENT",
-    "TOKEN_EOF",
-    "TOKEN_COLON",
-    "TOKEN_ERR",
+    "(",
+    ")",
+    "{",
+    "}",
+    ";",
+    "=",
+    "COMMENT",
+    "EOF",
+    ":",
+    "ERR",
 
     // arthemetic
-    "TOKEN_PLUS",
-    "TOKEN_MINUS",
-    "TOKEN_DIVIDE",
-    "TOKEN_MULTIPLY",
+    "+",
+    "-",
+    "/",
+    "*",
 
     // relational operators
-    " TOKEN_GREATER",
-    "TOKEN_LESSER",
-    "TOKEN_DB_EQUAL",
-    "TOKEN_EQ_GREATER",
-    "TOKEN_EQ_LESSER",
-    "TOKEN_EQ_NOT",
+    " >",
+    "<",
+    "==",
+    ">=",
+    "<=",
+    "!",
 
     // LOGICAL
-    "TOKEN_AND",
-    "TOKEN_OR",
-    "TOKEN_NOT",
+    "&&",
+    "||",
+    "!",
 
-    "TOKEN_IF",
-    "TOKEN_ELSE",
-    "TOKEN_FOR",
-    "TOKEN_RETURN",
-    "TOKEN_FN",
+    "if",
+    "else",
+    "for",
+    "return",
+    "fn",
 };
 
 typedef int TokenType;

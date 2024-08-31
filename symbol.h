@@ -1,9 +1,9 @@
 #ifndef SYMBOL_H_
 #define SYMBOL_H_
 
+#define INITIAL_CAPACITY 8
 #if 0
 #define MAX_PARAM_COUNT 10
-#define TABLE_SIZE 100
 typedef enum { SYMBOL_VARIABLE, SYMBOL_FUNCTION, SYMBOL_TYPE } SymbolType;
 
 typedef struct Symbol {
@@ -71,6 +71,7 @@ void enterScope(SymbolTable *table);
 void printSymbolTable(SymbolTable *table);
 void exitScope(SymbolTable *table);
 #endif
+
 typedef struct {
   char *symbol;
   char *type;  // Add a type field to each symbol table entry
@@ -86,6 +87,26 @@ typedef struct {
   int currentScope; // Keep track of the current scope
 } SymbolTable;
 
+#if 0
+typedef struct SymbolTableEntry {
+  char *name;
+  void *value;
+  char *type;
+} SymbolTableEntry;
+
+typedef struct Scope {
+  SymbolTableEntry **symbols;
+  int symbolCount;
+  int capacity;
+} Scope;
+
+typedef struct SymbolTable {
+  Scope **scopes;
+  int scopeCount;
+  int scopeCapacity;
+} SymbolTable;
+#endif
+
 SymbolTable *createSymbolTable(int initialCapacity);
 
 void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value);
@@ -97,4 +118,16 @@ void updateSymbolTableValue(SymbolTable *table, char *varName, char *value,
                             char *type);
 void exitScope(SymbolTable *table);
 
+#if 0
+SymbolTable *createSymbolTable();
+SymbolTableEntry *lookupSymbol(SymbolTable *table, const char *name);
+void addSymbolToCurrentScope(SymbolTable *table, char *name, void *value,
+                             char *type);
+void exitScope(SymbolTable *table);
+void enterScope(SymbolTable *table);
+void updateSymbolTableValue(SymbolTable *table, char *varName, char *value,
+                            char *type);
+SymbolTableEntry *lookupSymbol(SymbolTable *table, const char *name);
+void printSymbolTable(SymbolTable *);
+#endif
 #endif // SYMBOL_H_

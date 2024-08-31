@@ -13,6 +13,28 @@ Result *newResult(void *data, int nodeType) {
   res->result = data;
   return res;
 }
+
+static char *inferDatatype(AstNode *node) {
+  if (strcmp(node->identifier.type, "iden_num") == 0) {
+    return "number";
+  }
+  if (strcmp(node->identifier.type, "iden_str") == 0) {
+    return "string";
+  }
+  printf("unknown result type\n");
+  exit(EXIT_FAILURE);
+}
+
+static char *getDataType(Result *res) {
+  switch (res->NodeType) {
+  case NODE_NUMBER:
+    return "number";
+  case NODE_STRING_LITERAL:
+    return "string";
+  }
+  printf("unknown result type\n");
+  exit(EXIT_FAILURE);
+}
 static double convertStrToDouble(char *s) {
   double val;
   sscanf(s, "%lf", &val);
@@ -84,30 +106,61 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
   }
 
-  case NODE_IDENTIFIER_MUTATION: {
-    updateSymbolTableValue(p->table, node->identifier.name,
-                           node->identifier.value, node->identifier.type);
-
-    break;
-  }
-  case NODE_IDENTIFIER_ASSIGNMENT: {
+  case NODE_IDENTIFIER_VALUE: {
     SymbolTableEntry *var = lookupSymbol(p->table, node->identifier.name);
     if (!var) {
-      printf("%s is not decleared\n", node->identifier.name);
+      printParseError(p, "%s is not decleared\n", node->identifier.name);
       exit(EXIT_FAILURE);
     }
-    if (strcmp(node->identifier.type, "number") == 0) {
-      return newResult(&(double){convertStrToDouble(node->identifier.value)},
-                       NODE_NUMBER);
-    } else if (strcmp(node->identifier.type, "string") == 0) {
-      return newResult(strdup(node->identifier.value),
-                       NODE_STRING_LITERAL); // Duplicate string value
+    if (strcmp(var->type, "string") == 0) {
+      return newResult(var->value, NODE_STRING_LITERAL);
     }
+    return newResult(var->value, NODE_NUMBER);
+  }
+
+  case NODE_IDENTIFIER_MUTATION: {
+    SymbolTableEntry *var = lookupSymbol(p->table, node->identifier.name);
+    if (!var) {
+      printParseError(p, "%s is not decleared\n", node->identifier.name);
+      exit(EXIT_FAILURE);
+    }
+    Result *res = EvalAst(node->identifier.value, p);
+    updateSymbolTableValue(p->table, node->identifier.name, res->result,
+                           node->identifier.type);
+    break;
+  }
+
+  case NODE_IDENTIFIER_ASSIGNMENT: {
+    SymbolTableEntry *var = lookupSymbol(p->table, node->identifier.name);
+    if (var) {
+      printParseError(p, "cannot redeclare variable %s is already decleared\n",
+                      node->identifier.name);
+      exit(EXIT_FAILURE);
+    }
+
+    Result *res = EvalAst(node->identifier.value, p);
+    char *inferedDataType = getDataType(res);
+    if (strcmp(node->identifier.type, inferedDataType) != 0) {
+      printParseError(p, "cannot assign typeof %s to %s\n", inferedDataType,
+                      node->identifier.type);
+      exit(EXIT_FAILURE);
+    }
+    insertSymbol(p->table, node->identifier.name, node->identifier.type,
+                 res->result);
+
     break;
   }
 
   case NODE_IDENTIFIER_DECLERATION: {
-    printf("wh\n");
+    SymbolTableEntry *var = lookupSymbol(p->table, node->identifier.name);
+    if (var) {
+      printParseError(p, "cannot redeclare variable %s is already decleared\n",
+                      node->identifier.name);
+      exit(EXIT_FAILURE);
+    }
+
+    insertSymbol(p->table, node->identifier.name, node->identifier.type, NULL);
+
     break;
   }
 
@@ -117,6 +170,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
   }
 
   case NODE_BLOCK: {
+    enterScope(p->table);
     for (int i = 0; i < node->block.statementCount; i++) {
       AstNode *ast = node->block.statements[i];
       EvalAst(ast, p);
@@ -128,7 +182,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
   case NODE_IF_ELSE: {
     Result *conditionResult = EvalAst(node->ifElseBlock.condition, p);
     if (conditionResult->NodeType != NODE_NUMBER) {
-      printf("Error: Condition in if-else must be a number (interpreted as "
+      printParseError(
+          p, "Error: Condition in if-else must be a number (interpreted as "
              "boolean)\n");
       exit(EXIT_FAILURE);
     }
@@ -136,7 +191,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
     double conditionValue = *(double *)(conditionResult->result);
 
     if (conditionValue) {
-      // If condition is true (non-zero), execute ifBlock
       Result *val = EvalAst(node->ifElseBlock.ifBlock, p);
       if (val) {
         free(val->result);
@@ -155,7 +209,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
   }
 
   default:
-    printf("Error: Unexpected node type %s\n", node->type);
+    printf("Error: Unexpected node type %d\n", node->type);
     exit(EXIT_FAILURE);
   }
 

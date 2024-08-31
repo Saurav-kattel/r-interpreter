@@ -9,7 +9,32 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct Program {
+  AstNode **program;
+  int size;
+  int capacity;
+} Program;
+
 void shiftArgs(int *argc, char **argv) { (*argc) = (*argc) - 1; }
+
+void addToProgram(AstNode *ast, Program *pg) {
+  if (!pg) {
+    printf("program is null\n");
+    exit(EXIT_FAILURE);
+  }
+  if (pg->size >= pg->capacity) {
+    pg->capacity *= 2;
+    AstNode **newProgram =
+        (AstNode **)realloc(pg->program, pg->capacity * sizeof(AstNode *));
+    if (!newProgram) {
+      printf("Memory allocation failed\n");
+      exit(EXIT_FAILURE);
+    }
+    pg->program = newProgram;
+  }
+  pg->program[pg->size] = ast;
+  pg->size++;
+}
 
 int main(int argc, char **argv) {
   FILE *fp;
@@ -49,33 +74,26 @@ int main(int argc, char **argv) {
 
   SymbolTable *table = createSymbolTable(100);
   Parser *p = InitParser(lex, table);
-
   printf("\n\n%s\n\n", file_content);
+
+  Program *prog = (Program *)malloc(sizeof(Program));
+  prog->size = 0;
+  prog->capacity = 10;
+  prog->program = (AstNode **)malloc(sizeof(AstNode) * prog->capacity);
 
   while (p->current->type != TOKEN_EOF) {
     AstNode *ast = parseAst(p);
     if (ast) {
-      if (ast->type != NODE_STRING_LITERAL &&
-          ast->type != NODE_IDENTIFIER_ASSIGNMENT &&
-          NODE_IDENTIFIER_DECLERATION) {
-        Result *result = EvalAst(ast, p);
-        if (result) {
-          printf("\n %.3lf\n", *(double *)result->result);
-        }
-      } else if (ast->type == NODE_STRING_LITERAL) {
-        printf("\n%s\n", ast->stringLiteral.value);
-      } else if (ast->type == NODE_IDENTIFIER_ASSIGNMENT) {
-        printf("\n<name: %s| value: %s| type:%s>\n\n", ast->identifier.name,
-               ast->identifier.value, ast->identifier.type);
-      }
+      addToProgram(ast, prog);
     }
-    printSymbolTable(p->table);
-
-    freeAst(ast);
   }
 
-  free(p);
+  for (int i = 0; i < prog->size; i++) {
+    EvalAst(prog->program[i], p);
+  }
 
+  printSymbolTable(p->table);
+  free(p);
   free(lex);
   fclose(fp);
   free(file_content);

@@ -218,7 +218,7 @@ Token *GetNextToken(Lexer *l) {
 
   if (c == '#') {
     advance(l);
-    while (peek(l) != '#' && (!isAtEnd(l))) {
+    while ((peek(l) != '#' && peek(l) != '\n') && (!isAtEnd(l))) {
       advance(l);
     }
     advance(l);

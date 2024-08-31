@@ -12,9 +12,13 @@ void printSymbolTable(SymbolTable *table) {
 
   for (int i = 0; i < table->size; i++) {
     SymbolTableEntry sym = table->entries[i];
-
-    printf("%s\t\t%s\t%d\t%s\t\t%d\n", sym.symbol, sym.type, sym.scope,
-           sym.value ? (char *)sym.value : "NULL", table->currentScope);
+    if (strcmp(sym.type, "string") == 0) {
+      printf("%s\t\t%s\t%d\t%s\t\t%d\n", sym.symbol, sym.type, sym.scope,
+             sym.value ? (char *)sym.value : "NULL", table->currentScope);
+    } else {
+      printf("%s\t\t%s\t%d\t%lf\t\t%d\n", sym.symbol, sym.type, sym.scope,
+             sym.value ? *(double *)sym.value : -1.0, table->currentScope);
+    }
   }
 }
 
@@ -52,7 +56,16 @@ void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value) {
 
   table->entries[table->size].symbol = strdup(symbol);
   table->entries[table->size].type = strdup(type);
-  table->entries[table->size].value = strdup(value);
+
+  if (value != NULL) {
+    if (strcmp(type, "string") == 0) {
+      table->entries[table->size].value = strdup(value);
+    } else {
+      table->entries[table->size].value = value;
+    }
+  } else {
+    table->entries[table->size].value = NULL;
+  }
 
   table->entries[table->size].scope =
       table->currentScope; // Set the scope of the new symbol
@@ -77,7 +90,6 @@ SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol) {
 void enterScope(SymbolTable *table) { table->currentScope++; }
 
 void exitScope(SymbolTable *table) {
-
   int i = table->size - 1;
   while (i >= 0) {
     if (table->entries[i].scope == table->currentScope) {
@@ -94,7 +106,6 @@ void exitScope(SymbolTable *table) {
 
 void updateSymbolTableValue(SymbolTable *table, char *varName, char *value,
                             char *type) {
-
   SymbolTableEntry *sym = lookupSymbol(table, varName);
   if (strcmp(sym->type, type) != 0) {
     printf("cannot assing type of %s to type of %s\n", type, sym->type);
@@ -105,5 +116,14 @@ void updateSymbolTableValue(SymbolTable *table, char *varName, char *value,
     printf("variable %s not found \n", varName);
     exit(EXIT_FAILURE);
   }
-  sym->value = strdup(value);
+  if (value != NULL) {
+    if (strcmp(type, "string") == 0) {
+      sym->value = strdup(value);
+    } else {
+      sym->value = value;
+    }
+  } else {
+
+    sym->value = NULL;
+  }
 }
