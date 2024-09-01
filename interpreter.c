@@ -43,24 +43,48 @@ static double convertStrToDouble(char *s) {
 }
 
 Result *EvalAst(AstNode *node, Parser *p) {
+  printf("%s\n", nodeTypeNames[node->type]);
   switch (node->type) {
   case NODE_NUMBER:
     return newResult(&node->number, NODE_NUMBER);
   case NODE_FUNCTION_PARAM: {
-    for (int i = 0; i < node->function.paramsCount; i++) {
-      EvalAst(node->function.params[i], p);
+    for (int i = 0; i < node->function.defination.paramsCount; i++) {
+      EvalAst(node->function.defination.params[i], p);
     }
+    break;
   }
   case NODE_FUNCTION: {
-    SymbolTableEntry *sym = lookupFnSymbol(p->table, node->function.name);
+    SymbolTableEntry *sym =
+        lookupFnSymbol(p->table, node->function.defination.name);
     if (sym) {
       printParseError(p, "Funcion %s is already decelared",
-                      node->function.name);
+                      node->function.defination.name);
       exit(EXIT_FAILURE);
     }
-    //   insertFnSymbol(SymbolTable *table, char *symbol, char *type, void
-    //   *value);
+    insertFnSymbol(
+        p->table, node->function.defination.name,
+        node->function.defination.returnType, node->function.defination.params,
+        node->function.defination.body, node->function.defination.paramsCount);
+    break;
   }
+  case NODE_FUNCTION_CALL: {
+    SymbolTableEntry *sym = lookupFnSymbol(p->table, node->function.call.name);
+    if (!sym) {
+      printParseError(p, "undeclared function %s was called\n",
+                      node->function.call.name);
+      exit(EXIT_FAILURE);
+    }
+    // update the
+    for (int i = 0; i < node->function.call.argsCount; i++) {
+      Result *res = EvalAst(node->function.call.args[i], p);
+      updateSymbolTableValue(
+          p->table, sym->function.parameters[i]->identifier.name, res->result,
+          sym->function.parameters[i]->identifier.type);
+      EvalAst(sym->function.functionBody, p);
+    }
+    break;
+  }
+
   case NODE_BINARY_OP: {
     Result *left = EvalAst(node->binaryOp.left, p);
     Result *right = EvalAst(node->binaryOp.right, p);
@@ -140,7 +164,12 @@ Result *EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
     Result *res = EvalAst(node->identifier.value, p);
-
+    char *type = getDataType(res);
+    if (strcmp(type, var->type) != 0) {
+      printParseError(p, "cannot assign type of %s to type of %s", type,
+                      var->type);
+      exit(EXIT_FAILURE);
+    }
     updateSymbolTableValue(p->table, node->identifier.name, res->result,
                            var->type);
 
@@ -258,6 +287,7 @@ AstNode *parseAst(Parser *p) {
   switch (tkn->type) {
   case TOKEN_IDEN: {
     // Handle variable declaration or assignment
+
     AstNode *ast = varDecleration(p);
     consume(TOKEN_SEMI_COLON, p);
     return ast;

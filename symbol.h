@@ -13,7 +13,8 @@ SymbolTable *createSymbolTable(int initialCapacity);
 SymbolTableEntry *lookupFnSymbol(SymbolTable *table, char *symbol);
 
 void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value);
-
+void insertFnSymbol(SymbolTable *table, char *fnName, char *returnType,
+                    AstNode **params, AstNode *fnBody, int capacity);
 SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol);
 
 void enterScope(SymbolTable *table);

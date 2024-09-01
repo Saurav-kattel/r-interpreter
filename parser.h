@@ -12,6 +12,20 @@
 #define CYAN "\033[36m"
 #define RESET "\033[0m"
 
+static const char *nodeTypeNames[] = {
+    "NODE_BINARY_OP",
+    "NODE_NUMBER",
+    "NODE_STRING_LITERAL",
+    "NODE_FUNCTION",
+    "NODE_FUNCTION_PARAM",
+    "NODE_IDENTIFIER_VALUE",
+    "NODE_IDENTIFIER_DECLARATION", // Correcting the spelling of "DECLERATION"
+    "NODE_IDENTIFIER_ASSIGNMENT",
+    "NODE_IDENTIFIER_MUTATION",
+    "NODE_UNARY_OP",
+    "NODE_BLOCK",
+    "NODE_FUNCTION_CALL",
+    "NODE_IF_ELSE"};
 enum {
   NODE_BINARY_OP,
   NODE_NUMBER,
@@ -24,6 +38,7 @@ enum {
   NODE_IDENTIFIER_MUTATION,
   NODE_UNARY_OP,
   NODE_BLOCK,
+  NODE_FUNCTION_CALL,
   NODE_IF_ELSE,
 };
 
@@ -50,5 +65,6 @@ int parserIsAtEnd(Parser *p);
 // MIGHT BE NEEDED
 AstNode *parseProgram(Parser *p, SymbolTable *table);
 AstNode *parseFunction(Parser *p);
+AstNode *functionCall(Parser *p);
 int isKeyword(char *);
 #endif // PRASER_H

@@ -43,6 +43,7 @@ enum {
   TOKEN_FOR,
   TOKEN_RETURN,
   TOKEN_FN,
+
 };
 
 static const char *tokenNames[] = {

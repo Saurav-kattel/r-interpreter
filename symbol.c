@@ -1,4 +1,5 @@
 #include "symbol.h"
+#include "common.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,12 +13,14 @@ void printSymbolTable(SymbolTable *table) {
 
   for (int i = 0; i < table->size; i++) {
     SymbolTableEntry sym = table->entries[i];
-    if (strcmp(sym.type, "string") == 0) {
-      printf("%s\t\t%s\t%d\t%s\t\t%d\n", sym.symbol, sym.type, sym.scope,
-             sym.value ? (char *)sym.value : "NULL", table->currentScope);
-    } else {
-      printf("%s\t\t%s\t%d\t%lf\t\t%d\n", sym.symbol, sym.type, sym.scope,
-             sym.value ? *(double *)sym.value : -1.0, table->currentScope);
+    if (!sym.isFn) {
+      if (strcmp(sym.type, "string") == 0) {
+        printf("%s\t\t%s\t%d\t%s\t\t%d\n", sym.symbol, sym.type, sym.scope,
+               sym.value ? (char *)sym.value : "NULL", table->currentScope);
+      } else if (strcmp(sym.type, "number")) {
+        printf("%s\t\t%s\t%d\t%lf\t\t%d\n", sym.symbol, sym.type, sym.scope,
+               sym.value ? *(double *)sym.value : -1.0, table->currentScope);
+      }
     }
   }
 }
@@ -31,6 +34,40 @@ SymbolTable *createSymbolTable(int initialCapacity) {
   table->capacity = initialCapacity;
   table->currentScope = 0; // Initialize the current scope to 0
   return table;
+}
+
+// Function to insert a new symbol into the symbol table
+void insertFnSymbol(SymbolTable *table, char *fnName, char *returnType,
+                    AstNode **params, AstNode *fnBody, int paramCount) {
+
+  // Check if the symbol is already declared in the current scope
+  for (int i = table->size - 1; i >= 0; i--) {
+    if (strcmp(table->entries[i].function.name, fnName) == 0 &&
+        table->entries[i].scope == table->currentScope) {
+      printf("Error: Symbol '%s' is already declared in the current scope.\n",
+             fnName);
+      return;
+    }
+  }
+
+  // Insert the new symbol
+  if (table->size == table->capacity) {
+    // Resize the table if it's full
+    table->capacity *= 2;
+    table->entries = (SymbolTableEntry *)realloc(
+        table->entries, table->capacity * sizeof(SymbolTableEntry));
+  }
+
+  table->entries[table->size].function.name = strdup(fnName);
+  table->entries[table->size].function.parameters = params;
+  table->entries[table->size].function.returnType = strdup(returnType);
+  table->entries[table->size].function.scopeLevel = table->currentScope;
+  table->entries[table->size].function.parameterCount = paramCount;
+  table->entries[table->size].function.functionBody = fnBody;
+  table->entries[table->size].isFn = 1;
+  table->entries[table->size].scope =
+      table->currentScope; // Set the scope of the new symbol
+  table->size++;
 }
 
 // Function to insert a new symbol into the symbol table
@@ -75,6 +112,7 @@ void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value) {
 SymbolTableEntry *lookupFnSymbol(SymbolTable *table, char *symbol) {
   for (int i = table->size - 1; i >= 0; i--) {
     int symbolMatches = strcmp(table->entries[i].function.name, symbol) == 0;
+
     int inScope = table->entries[i].scope <= table->currentScope;
     if (symbolMatches && inScope) {
       return &table->entries[i];

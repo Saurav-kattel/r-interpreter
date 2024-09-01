@@ -22,6 +22,10 @@ typedef struct Result {
 typedef struct {
   Token *current;
   Lexer *lex;
+  Token **tokens;
+  int idx;
+  int size;
+
   SymbolTable *table;
 } Parser;
 
@@ -33,11 +37,10 @@ typedef struct SymbolTableEntry {
   int scope; // Scope field for each symbol table entry
 
   struct {
-    char *name;         // Name of the function
-    char *returnType;   // Return type of the function (e.g., "int", "string")
-    int parameterCount; // Number of parameters
-    struct SymbolTableEntry *
-        *parameters; // Array of parameter entries (variables)
+    char *name;           // Name of the function
+    char *returnType;     // Return type of the function (e.g., "int", "string")
+    int parameterCount;   // Number of parameters
+    AstNode **parameters; // Array of parameter entries (variables)
     // Symbol table for function's local variables
     int scopeLevel;        // Scope level of the function
     AstNode *functionBody; // AST node representing the function's body
@@ -84,12 +87,24 @@ struct AstNode {
     } stringLiteral;
 
     struct {
-      char *name;
-      char *returnType;
-      AstNode **params;
-      int paramsCount;
-      AstNode *body;
-    } function;
+      int isCall;
+      union {
+        struct {
+          char *name;
+          char *returnType;
+          AstNode **params;
+          int paramsCount;
+          AstNode *body;
+        } defination;
+
+        struct {
+          char *name;
+          AstNode **args;
+          int argsCount;
+        } call;
+
+      } function;
+    };
   };
 };
 

@@ -81,7 +81,6 @@ TokenType getKeywordTokenType(char *buff) {
   if (strcmp(buff, "fn") == 0) {
     return TOKEN_FN;
   }
-
   return -1;
 }
 int isNotTypeKeyword(char *name) {
