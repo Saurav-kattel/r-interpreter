@@ -17,9 +17,9 @@ void printSymbolTable(SymbolTable *table) {
       if (strcmp(sym.type, "string") == 0) {
         printf("%s\t\t%s\t%d\t%s\t\t%d\n", sym.symbol, sym.type, sym.scope,
                sym.value ? (char *)sym.value : "NULL", table->currentScope);
-      } else if (strcmp(sym.type, "number")) {
+      } else if (strcmp(sym.type, "number") == 0) {
         printf("%s\t\t%s\t%d\t%lf\t\t%d\n", sym.symbol, sym.type, sym.scope,
-               sym.value ? *(double *)sym.value : -1.0, table->currentScope);
+               sym.value ? *(double *)sym.value : 0, table->currentScope);
       }
     }
   }
@@ -72,7 +72,6 @@ void insertFnSymbol(SymbolTable *table, char *fnName, char *returnType,
 
 // Function to insert a new symbol into the symbol table
 void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value) {
-
   // Check if the symbol is already declared in the current scope
   for (int i = table->size - 1; i >= 0; i--) {
     if (strcmp(table->entries[i].symbol, symbol) == 0 &&
@@ -90,15 +89,16 @@ void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value) {
     table->entries = (SymbolTableEntry *)realloc(
         table->entries, table->capacity * sizeof(SymbolTableEntry));
   }
-
   table->entries[table->size].symbol = strdup(symbol);
   table->entries[table->size].type = strdup(type);
 
-  if (value != NULL) {
-    if (strcmp(type, "string") == 0) {
-      table->entries[table->size].value = strdup(value);
-    } else {
-      table->entries[table->size].value = value;
+  if (value) {
+    if (strcmp(type, "number") == 0) {
+      double *newValue = (double *)malloc(sizeof(double));
+      *newValue = *(double *)value;
+      table->entries[table->size].value = newValue;
+    } else if (strcmp(type, "string") == 0) {
+      table->entries[table->size].value = strdup((char *)value);
     }
   } else {
     table->entries[table->size].value = NULL;
@@ -137,6 +137,7 @@ SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol) {
 void enterScope(SymbolTable *table) { table->currentScope++; }
 
 void exitScope(SymbolTable *table) {
+#if 0
   int i = table->size - 1;
   while (i >= 0) {
     if (table->entries[i].scope == table->currentScope) {
@@ -147,7 +148,7 @@ void exitScope(SymbolTable *table) {
     }
     i--;
   }
-
+#endif
   table->currentScope--;
 }
 

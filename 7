@@ -318,9 +318,8 @@ AstNode *term(Parser *p) {
   }
   AstNode *node = factor(p);
 
-  while (p->current &&
-         (p->current->type == TOKEN_MULTIPLY ||
-          p->current->type == TOKEN_DIVIDE || p->current->type == TOKEN_DOT)) {
+  while (p->current && (p->current->type == TOKEN_MULTIPLY ||
+                        p->current->type == TOKEN_DIVIDE)) {
     Token *tkn = p->current;
     consume(tkn->type, p);
     AstNode *right = factor(p);
@@ -333,8 +332,8 @@ AstNode *term(Parser *p) {
 AstNode *expr(Parser *p) {
   AstNode *node = term(p);
 
-  while (p->current &&
-         (p->current->type == TOKEN_PLUS || p->current->type == TOKEN_MINUS)) {
+  while (p->current && (p->current->type == TOKEN_PLUS ||
+                        p->current->type == TOKEN_MINUS || TOKEN_DOT)) {
     Token *tkn = p->current;
 
     // Consume the '+' or '-' token
@@ -373,10 +372,6 @@ AstNode *factor(Parser *p) {
     AstNode *node =
         newIdentifierNode("", tkn->value, NULL, p, NODE_IDENTIFIER_VALUE);
     consume(TOKEN_IDEN, p);
-    return node;
-  } else if (tkn->type == TOKEN_STRING) {
-    AstNode *node = newStringNode(p->current->value);
-    consume(TOKEN_STRING, p);
     return node;
   }
   printParseError(p,
@@ -438,12 +433,13 @@ AstNode *handleNumberIdentifiers(Parser *p, Token *typeToken, char *varName,
 
 AstNode *handleStringIdentifiers(Parser *p, Token *typeToken, char *varName,
                                  int nodeType) {
-  AstNode *valueNode = logical(p);
 
+  AstNode *stringNode = newStringNode(p->current->value);
+  advanceParser(p);
   if (nodeType == NODE_IDENTIFIER_MUTATION) {
-    return newIdentifierNode("string", varName, valueNode, p, nodeType);
+    return newIdentifierNode("string", varName, stringNode, p, nodeType);
   }
-  return newIdentifierNode(typeToken->value, varName, valueNode, p, nodeType);
+  return newIdentifierNode(typeToken->value, varName, stringNode, p, nodeType);
 }
 
 AstNode *handleIdenIdentifiers(Parser *p, Token *typeToken, char *varName,
@@ -497,6 +493,7 @@ AstNode *varDecleration(Parser *p) {
       exit(EXIT_FAILURE);
       break;
     }
+    //}
   }
 
   consume(TOKEN_COLON, p);
@@ -507,15 +504,13 @@ AstNode *varDecleration(Parser *p) {
     return newIdentifierNode(typeToken->value, varName, NULL, p,
                              NODE_IDENTIFIER_DECLERATION);
   }
-
   if (!checkValidType(typeToken)) {
     printParseError(p, "\"%s\" is not a valid type\n", typeToken->value);
     exit(EXIT_FAILURE);
   }
   consume(TOKEN_ASSIGN, p);
-
-  switch (tkn->type) {
-  case NODE_NUMBER:
+  switch (p->current->type) {
+  case TOKEN_NUMBER:
     return handleNumberIdentifiers(p, typeToken, varName,
                                    NODE_IDENTIFIER_ASSIGNMENT);
   case TOKEN_STRING:

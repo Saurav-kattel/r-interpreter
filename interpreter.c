@@ -14,6 +14,14 @@ Result *newResult(void *data, int nodeType) {
   res->result = data;
   return res;
 }
+char *trimQuotes(char *str) {
+  size_t len = strlen(str);
+  if (str[0] == '"' && str[len - 1] == '"') {
+    str[len - 1] = '\0'; // Remove ending quote
+    return str + 1;      // Skip starting quote
+  }
+  return str;
+}
 
 static char *inferDatatype(AstNode *node) {
   if (strcmp(node->identifier.type, "iden_num") == 0) {
@@ -43,7 +51,6 @@ static double convertStrToDouble(char *s) {
 }
 
 Result *EvalAst(AstNode *node, Parser *p) {
-  printf("%s\n", nodeTypeNames[node->type]);
   switch (node->type) {
   case NODE_NUMBER:
     return newResult(&node->number, NODE_NUMBER);
@@ -74,7 +81,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
                       node->function.call.name);
       exit(EXIT_FAILURE);
     }
-    // update the
+    // update the func symbol table params with the value of args
     for (int i = 0; i < node->function.call.argsCount; i++) {
       Result *res = EvalAst(node->function.call.args[i], p);
       updateSymbolTableValue(
@@ -92,8 +99,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
     if (left->NodeType == NODE_NUMBER && right->NodeType == NODE_NUMBER) {
       double leftVal = *(double *)(left->result);
       double rightVal = *(double *)(right->result);
-
       switch (node->binaryOp.op) {
+
       case TOKEN_PLUS:
         return newResult(&(double){leftVal + rightVal}, NODE_NUMBER);
       case TOKEN_MINUS:
@@ -118,12 +125,38 @@ Result *EvalAst(AstNode *node, Parser *p) {
         return newResult(&(double){(leftVal && rightVal)}, NODE_NUMBER);
       case TOKEN_OR:
         return newResult(&(double){(leftVal || rightVal)}, NODE_NUMBER);
+
       default:
         printf("Error: Unknown binary operator\n");
         exit(EXIT_FAILURE);
       }
+    } else if (left->NodeType == NODE_STRING_LITERAL &&
+               right->NodeType == NODE_STRING_LITERAL) {
+
+      char *leftStr = trimQuotes((char *)left->result);
+      char *rightStr = trimQuotes((char *)right->result);
+
+      size_t len1 = strlen(leftStr);
+      size_t len2 = strlen(rightStr);
+
+      char *concatenated =
+          (char *)malloc(len1 + len2 + 1); // +1 for null terminator
+      if (concatenated == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+      }
+
+      strcpy(concatenated, leftStr);
+      strcat(concatenated, rightStr);
+
+      printf("here\n");
+
+      return newResult(concatenated, NODE_STRING_LITERAL);
     } else {
-      printf("Error: Invalid types for binary operation\n");
+
+      printf("Error: cannot do ( %s ) operations between %s and %s \n",
+             tokenNames[node->binaryOp.op], getDataType(left),
+             getDataType(right));
       exit(EXIT_FAILURE);
     }
   }
@@ -183,7 +216,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
                       node->identifier.name);
       exit(EXIT_FAILURE);
     }
-
     Result *res = EvalAst(node->identifier.value, p);
     char *inferedDataType = getDataType(res);
     if (strcmp(node->identifier.type, inferedDataType) != 0) {
@@ -283,6 +315,12 @@ AstNode *parseAst(Parser *p) {
     return NULL; // No more tokens to parse
   }
 
+  // skips if the token is comment
+  if (p->current->type == TOKEN_COMMENT) {
+    p->idx++;
+    p->current = p->tokens[p->idx];
+  }
+
   Token *tkn = p->current;
   switch (tkn->type) {
   case TOKEN_IDEN: {
@@ -298,13 +336,13 @@ AstNode *parseAst(Parser *p) {
   }
   case TOKEN_STRING: {
     AstNode *ast = string(p);
-    consume(TOKEN_SEMI_COLON, p); // Assuming statements end with a semicolon
+    // Assuming statements end with a semicolon
     return ast;
   } // Handle string literals (if needed)
   case TOKEN_NUMBER: {
     // Handle number literals (if needed)
     AstNode *numberNode = factor(p);
-    consume(TOKEN_SEMI_COLON, p); // Assuming statements end with a semicolon
+    // Assuming statements end with a semicolon
     return numberNode;
   }
   case TOKEN_IF:
@@ -315,6 +353,8 @@ AstNode *parseAst(Parser *p) {
     AstNode *st = parseBlockStmt(p);
     return st;
   }
+  case TOKEN_EOF:
+    return NULL;
   default:
     printParseError(p, "Unexpected token %s falling through the condition\n",
                     tokenNames[tkn->type]);

@@ -216,10 +216,13 @@ Token *GetNextToken(Lexer *l) {
   if (c == ';') {
     return NewToken(TOKEN_SEMI_COLON, ";");
   }
+  if (c == '.') {
+    return NewToken(TOKEN_DOT, ".");
+  }
 
   if (c == '#') {
     advance(l);
-    while ((peek(l) != '#' && peek(l) != '\n') && (!isAtEnd(l))) {
+    while ((peek(l) != '#') && (!isAtEnd(l))) {
       advance(l);
     }
     advance(l);
