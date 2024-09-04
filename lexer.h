@@ -44,6 +44,7 @@ enum {
   TOKEN_FOR,
   TOKEN_RETURN,
   TOKEN_FN,
+  TOKEN_PRINT,
 
 };
 
@@ -90,6 +91,7 @@ static const char *tokenNames[] = {
     "for",
     "return",
     "fn",
+    "println",
 };
 
 typedef int TokenType;
@@ -103,7 +105,7 @@ typedef struct {
 
 typedef struct {
   TokenType type;
-  char value[100];
+  char *value;
 } Token;
 
 Lexer *InitLexer(char *, char *);

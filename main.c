@@ -1,4 +1,5 @@
 
+#include "common.h"
 #include "interpreter.h"
 #include "lexer.h"
 #include "parser.h"
@@ -15,6 +16,15 @@ typedef struct Program {
 } Program;
 
 void shiftArgs(int *argc, char **argv) { (*argc) = (*argc) - 1; }
+
+void freeTokens(Token *tkn) {
+  if (tkn) {
+    if (tkn->value) {
+      free(tkn->value);
+    }
+    free(tkn);
+  }
+}
 
 void addToProgram(AstNode *ast, Program *pg) {
   if (!pg) {
@@ -73,12 +83,11 @@ int main(int argc, char **argv) {
 
   SymbolTable *table = createSymbolTable(100);
   Parser *p = InitParser(lex, table);
-  printf("\n\n%s\n\n", file_content);
-
   Program *prog = (Program *)malloc(sizeof(Program));
   prog->size = 0;
   prog->capacity = 10;
   prog->program = (AstNode **)malloc(sizeof(AstNode) * prog->capacity);
+
   while (p->current->type != TOKEN_EOF) {
 
     AstNode *ast = parseAst(p);
@@ -88,12 +97,32 @@ int main(int argc, char **argv) {
   }
 
   for (int i = 0; i < prog->size; i++) {
-    EvalAst(prog->program[i], p);
+    Result *res = EvalAst(prog->program[i], p);
+    if (res != NULL) {
+      if (res->result != NULL) {
+        if (res->NodeType == NODE_STRING_LITERAL) {
+          free(res->result);
+        }
+      }
+      free(res);
+    }
   }
 
-  printSymbolTable(p->table);
+  for (int i = 0; i < p->size; i++) {
+    freeTokens(p->tokens[i]);
+  }
+
+  free(p->tokens);
+  free(p->lex->source);
+  free(p->lex->filename);
+  free(p->lex);
+  for (int i = 0; i < prog->size; i++) {
+    freeAst(prog->program[i]);
+  }
+  freeSymbolTable(p->table);
+  free(prog->program);
+  free(prog);
   free(p);
-  free(lex);
   fclose(fp);
   free(file_content);
   return 0;

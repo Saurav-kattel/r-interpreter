@@ -6,6 +6,7 @@
 #include <time.h>
 
 // A constructor for Lexer reutrns Lexer
+
 Lexer *InitLexer(char *source, char *filename) {
   Lexer *lex = (Lexer *)malloc(sizeof(Lexer));
   if (lex == NULL) {
@@ -15,17 +16,36 @@ Lexer *InitLexer(char *source, char *filename) {
 
   lex->curr = 0;
   lex->line = 1;
+
+  // Allocate memory for filename and copy it
   lex->filename = strdup(filename);
-  lex->source = (char *)malloc(sizeof(char) * strlen(source));
+  if (lex->filename == NULL) {
+    printf("Failed allocating memory for filename\n");
+    free(lex); // Clean up previously allocated memory
+    exit(EXIT_FAILURE);
+  }
+
+  // Allocate memory for source and copy it
+  size_t source_len = strlen(source);
+
+  lex->source = (char *)malloc(sizeof(char) * (source_len + 1));
+  // Ensure +1 for null terminator
+  if (lex->source == NULL) {
+    printf("Failed allocating memory for source\n");
+    free(filename);
+    free(lex->filename); // Clean up previously allocated memory
+    free(lex);           // Clean up previously allocated memory
+    exit(EXIT_FAILURE);
+  }
   strcpy(lex->source, source);
+  lex->source[source_len] = '\0';
   return lex;
 }
-
 // Returns  a new token with the supplied value and type
 Token *NewToken(TokenType type, char *value) {
   Token *tkn = (Token *)malloc(sizeof(Token));
   tkn->type = type;
-  strcpy(tkn->value, value);
+  tkn->value = strdup(value);
   return tkn;
 }
 
@@ -81,11 +101,16 @@ TokenType getKeywordTokenType(char *buff) {
   if (strcmp(buff, "fn") == 0) {
     return TOKEN_FN;
   }
+
+  if (strcmp(buff, "println") == 0) {
+    return TOKEN_PRINT;
+  }
   return -1;
 }
+
 int isNotTypeKeyword(char *name) {
-  int arraySize = 4;
-  const char *keywords[] = {"if", "fn", "else", "for"};
+  int arraySize = 6;
+  const char *keywords[] = {"if", "fn", "else", "for", "return", "println"};
   for (int i = 0; i < arraySize; i++) {
     if (strcmp(keywords[i], name) == 0) {
       return 1;
@@ -130,6 +155,7 @@ Token *GetNextToken(Lexer *l) {
     advance(l);
   }
 
+  // identifiers and keywords
   if (isalpha(c)) {
     int start = l->curr - 1;
 
@@ -139,9 +165,12 @@ Token *GetNextToken(Lexer *l) {
 
     int length = l->curr - start;
     char *buffer = (char *)malloc(length + 1);
+
     strncpy(buffer, l->source + start, length);
     buffer[length] = '\0';
+
     if (isNotTypeKeyword(buffer)) {
+
       TokenType type = getKeywordTokenType(buffer);
       if (type == -1) {
         printf("unkwon type\n");
@@ -151,6 +180,7 @@ Token *GetNextToken(Lexer *l) {
       free(buffer);
       return tkn;
     }
+
     Token *tkn = NewToken(TOKEN_IDEN, buffer);
     free(buffer);
     return tkn;

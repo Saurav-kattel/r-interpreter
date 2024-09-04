@@ -1,6 +1,8 @@
 #include "symbol.h"
 #include "common.h"
+#include "parser.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,7 +11,7 @@
 void printSymbolTable(SymbolTable *table) {
   printf("\n\nSymbol Table:\n");
   printf("Name\t\tType\ttScope\tValue\tcurrentscope\n");
-  printf("----------------------------------------------------------\n");
+  printf("-------------------------------------------------\n");
 
   for (int i = 0; i < table->size; i++) {
     SymbolTableEntry sym = table->entries[i];
@@ -19,13 +21,29 @@ void printSymbolTable(SymbolTable *table) {
                sym.value ? (char *)sym.value : "NULL", table->currentScope);
       } else if (strcmp(sym.type, "number") == 0) {
         printf("%s\t\t%s\t%d\t%lf\t\t%d\n", sym.symbol, sym.type, sym.scope,
-               sym.value ? *(double *)sym.value : 0, table->currentScope);
+               *(double *)sym.value, table->currentScope);
       }
     }
   }
 }
 
+void printFnSymbolTable(SymbolTable *table) {
+  printf("\n\nFN Symbol Table:\n");
+  printf("Name\t\tType\tParamCount\tScope\tCurrentScope\n");
+  printf("--------------------------------------------------------------\n");
+
+  for (int i = 0; i < table->size; i++) {
+    SymbolTableEntry sym = table->entries[i];
+    if (sym.isFn) {
+      printf("%s\t\t%s\t\t%d\t%d\t\t%d\n", sym.function.name,
+             sym.function.returnType, sym.function.parameterCount,
+             sym.function.scopeLevel, table->currentScope);
+    }
+  }
+}
+
 // Function to create a new symbol table
+
 SymbolTable *createSymbolTable(int initialCapacity) {
   SymbolTable *table = (SymbolTable *)malloc(sizeof(SymbolTable));
   table->entries =
@@ -33,6 +51,23 @@ SymbolTable *createSymbolTable(int initialCapacity) {
   table->size = 0;
   table->capacity = initialCapacity;
   table->currentScope = 0; // Initialize the current scope to 0
+
+  // Explicitly initialize each entry in the table
+  for (int i = 0; i < initialCapacity; i++) {
+    table->entries[i].symbol = NULL;
+    table->entries[i].type = NULL;
+    table->entries[i].value = NULL;
+    table->entries[i].isFn = 0;
+    table->entries[i].isParam = 0;
+    table->entries[i].scope = 0;
+    table->entries[i].function.name = NULL;
+    table->entries[i].function.returnType = NULL;
+    table->entries[i].function.parameterCount = 0;
+    table->entries[i].function.parameters = NULL;
+    table->entries[i].function.scopeLevel = 0;
+    table->entries[i].function.functionBody = NULL;
+  }
+
   return table;
 }
 
@@ -42,6 +77,9 @@ void insertFnSymbol(SymbolTable *table, char *fnName, char *returnType,
 
   // Check if the symbol is already declared in the current scope
   for (int i = table->size - 1; i >= 0; i--) {
+    if (!table->entries[i].isFn) {
+      continue;
+    }
     if (strcmp(table->entries[i].function.name, fnName) == 0 &&
         table->entries[i].scope == table->currentScope) {
       printf("Error: Symbol '%s' is already declared in the current scope.\n",
@@ -71,65 +109,112 @@ void insertFnSymbol(SymbolTable *table, char *fnName, char *returnType,
 }
 
 // Function to insert a new symbol into the symbol table
-void insertSymbol(SymbolTable *table, char *symbol, char *type, void *value) {
+
+void insertSymbol(SymbolTable *table, char *symbol, char *type, Result *value,
+                  int isParam) {
   // Check if the symbol is already declared in the current scope
-  for (int i = table->size - 1; i >= 0; i--) {
-    if (strcmp(table->entries[i].symbol, symbol) == 0 &&
-        table->entries[i].scope == table->currentScope) {
-      printf("Error: Symbol '%s' is already declared in the current scope.\n",
-             symbol);
-      return;
+  if (!isParam) {
+    for (int i = table->size - 1; i >= 0; i--) {
+      if (table->entries[i].isFn) {
+        continue;
+      }
+      if (strcmp(table->entries[i].symbol, symbol) == 0 &&
+          table->entries[i].scope == table->currentScope) {
+        printf("Error: Symbol '%s' is already declared in the current scope.\n",
+               symbol);
+        return;
+      }
     }
   }
 
-  // Insert the new symbol
   if (table->size == table->capacity) {
-    // Resize the table if it's full
     table->capacity *= 2;
-    table->entries = (SymbolTableEntry *)realloc(
+    SymbolTableEntry *new_entries = (SymbolTableEntry *)realloc(
         table->entries, table->capacity * sizeof(SymbolTableEntry));
+    if (!new_entries) {
+      // Handle reallocation failure
+      fprintf(stderr, "Memory reallocation failed\n");
+      exit(EXIT_FAILURE);
+    }
+    table->entries = new_entries;
   }
+
   table->entries[table->size].symbol = strdup(symbol);
   table->entries[table->size].type = strdup(type);
 
   if (value) {
-    if (strcmp(type, "number") == 0) {
-      double *newValue = (double *)malloc(sizeof(double));
-      *newValue = *(double *)value;
-      table->entries[table->size].value = newValue;
-    } else if (strcmp(type, "string") == 0) {
-      table->entries[table->size].value = strdup((char *)value);
+    if (value->NodeType == NODE_STRING_LITERAL) {
+      table->entries[table->size].value = strdup((char *)value->result);
+    } else {
+      table->entries[table->size].value = (double *)value->result;
     }
   } else {
     table->entries[table->size].value = NULL;
   }
 
+  if (table->size == table->capacity) {
+    table->capacity *= 2;
+    table->entries = (SymbolTableEntry *)realloc(
+        table->entries, table->capacity * sizeof(SymbolTableEntry));
+    if (!table->entries) {
+      fprintf(stderr, "Memory reallocation failed\n");
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  table->entries[table->size].isParam = isParam;
   table->entries[table->size].scope =
       table->currentScope; // Set the scope of the new symbol
   table->size++;
 }
 
 SymbolTableEntry *lookupFnSymbol(SymbolTable *table, char *symbol) {
-  for (int i = table->size - 1; i >= 0; i--) {
-    int symbolMatches = strcmp(table->entries[i].function.name, symbol) == 0;
 
-    int inScope = table->entries[i].scope <= table->currentScope;
-    if (symbolMatches && inScope) {
-      return &table->entries[i];
+  for (int i = table->size - 1; i >= 0; i--) {
+    if (table->entries[i].isFn) {
+      int symbolMatches = strcmp(table->entries[i].function.name, symbol) == 0;
+      int inScope =
+          table->entries[i].function.scopeLevel <= table->currentScope;
+      if (symbolMatches && inScope) {
+        return &table->entries[i];
+      }
     }
   }
   return NULL; // Symbol not found
 }
 
-// Function to lookup a symbol in the symbol table, considering scope
-SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol) {
+SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol, int param) {
+  // Check for NULL pointers
+  if (table == NULL || symbol == NULL || table->entries == NULL) {
+    return NULL; // Invalid input or empty table, return NULL
+  }
+
+  // Verify table size is within expected limits
+  if (table->size <= 0) {
+    return NULL; // Empty table or invalid size, return NULL
+  }
+
   for (int i = table->size - 1; i >= 0; i--) {
+    // Check if symbol is initialized
+    if (table->entries[i].symbol == NULL) {
+      continue; // Skip uninitialized symbols
+    }
+
     int symbolMatches = strcmp(table->entries[i].symbol, symbol) == 0;
     int inScope = table->entries[i].scope <= table->currentScope;
-    if (symbolMatches && inScope) {
-      return &table->entries[i];
+    int isParam = table->entries[i].isParam;
+
+    if (param) {
+      if (symbolMatches && inScope && isParam) {
+        return &table->entries[i];
+      }
+    } else {
+      if (symbolMatches && inScope) {
+        return &table->entries[i];
+      }
     }
   }
+
   return NULL; // Symbol not found
 }
 
@@ -137,7 +222,6 @@ SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol) {
 void enterScope(SymbolTable *table) { table->currentScope++; }
 
 void exitScope(SymbolTable *table) {
-#if 0
   int i = table->size - 1;
   while (i >= 0) {
     if (table->entries[i].scope == table->currentScope) {
@@ -148,13 +232,13 @@ void exitScope(SymbolTable *table) {
     }
     i--;
   }
-#endif
   table->currentScope--;
 }
 
-void updateSymbolTableValue(SymbolTable *table, char *varName, char *value,
+void updateSymbolTableValue(SymbolTable *table, char *varName, Result *value,
                             char *type) {
-  SymbolTableEntry *sym = lookupSymbol(table, varName);
+  SymbolTableEntry *sym = lookupSymbol(table, varName, 0);
+
   if (strcmp(sym->type, type) != 0) {
     printf("cannot assing type of %s to type of %s\n", type, sym->type);
     exit(EXIT_FAILURE);
@@ -166,12 +250,16 @@ void updateSymbolTableValue(SymbolTable *table, char *varName, char *value,
   }
   if (value != NULL) {
     if (strcmp(type, "string") == 0) {
-      sym->value = strdup(value);
+
+      if (sym->value) {
+        free(sym->value);
+      }
+      sym->value = strdup(value->result);
     } else {
-      sym->value = value;
+      sym->value = (double *)value->result;
     }
   } else {
-
     sym->value = NULL;
   }
+  free(value);
 }

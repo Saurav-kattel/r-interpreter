@@ -34,6 +34,7 @@ typedef struct SymbolTableEntry {
   char *type;  // Type field for each symbol table entry
   void *value; // Use a void pointer to store values of different types
   int isFn;
+  int isParam;
   int scope; // Scope field for each symbol table entry
 
   struct {
@@ -42,16 +43,22 @@ typedef struct SymbolTableEntry {
     int parameterCount;   // Number of parameters
     AstNode **parameters; // Array of parameter entries (variables)
     // Symbol table for function's local variables
-    int scopeLevel;        // Scope level of the function
+    int scopeLevel;
     AstNode *functionBody; // AST node representing the function's body
   } function;
 } SymbolTableEntry;
 
 struct AstNode {
   int type;
+  int isParam;
   double number;
 
   union {
+    struct AstNode *expr;
+    struct {
+      AstNode **statments;
+      int statementCount;
+    } print;
     struct {
       struct AstNode *left;
       struct AstNode *right;
@@ -67,7 +74,6 @@ struct AstNode {
       char *name;
       char *type;
       struct AstNode *value;
-      SymbolTable *table;
       int isDeceleration;
     } identifier;
 

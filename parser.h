@@ -13,19 +13,22 @@
 #define RESET "\033[0m"
 
 static const char *nodeTypeNames[] = {
-    "NODE_BINARY_OP",
-    "NODE_NUMBER",
-    "NODE_STRING_LITERAL",
-    "NODE_FUNCTION",
-    "NODE_FUNCTION_PARAM",
-    "NODE_IDENTIFIER_VALUE",
-    "NODE_IDENTIFIER_DECLARATION", // Correcting the spelling of "DECLERATION"
-    "NODE_IDENTIFIER_ASSIGNMENT",
-    "NODE_IDENTIFIER_MUTATION",
-    "NODE_UNARY_OP",
-    "NODE_BLOCK",
-    "NODE_FUNCTION_CALL",
-    "NODE_IF_ELSE"};
+    "node_binary_op",
+    "node_number",
+    "node_string_literal",
+    "node_function",
+    "node_function_param",
+    "node_identifier_value",
+    "node_identifier_declaration", // correcting the spelling of "decleration"
+    "node_identifier_assignment",
+    "node_identifier_mutation",
+    "node_unary_op",
+    "node_block",
+    "node_function_call",
+    "node_if_else",
+    "node_return",
+    "node_function_print",
+};
 enum {
   NODE_BINARY_OP,
   NODE_NUMBER,
@@ -40,6 +43,8 @@ enum {
   NODE_BLOCK,
   NODE_FUNCTION_CALL,
   NODE_IF_ELSE,
+  NODE_RETURN,
+  NODE_FUNCTION_PRINT,
 };
 
 // NECESSARY
@@ -54,6 +59,8 @@ AstNode *varDecleration(Parser *p);
 AstNode *parseBlockStmt(Parser *p);
 AstNode *ifElseParser(Parser *p);
 AstNode *parseStatement(Parser *p);
+AstNode *parseReturn(Parser *p);
+AstNode *parsePrint(Parser *p);
 // utils
 Parser *InitParser(Lexer *, SymbolTable *);
 void freeAst(AstNode *);
