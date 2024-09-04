@@ -66,6 +66,9 @@ struct AstNode {
     } binaryOp;
 
     struct {
+      char *type;
+    } read;
+    struct {
       struct AstNode *right;
       TokenType op;
     } unaryOp;

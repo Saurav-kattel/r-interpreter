@@ -28,6 +28,7 @@ static const char *nodeTypeNames[] = {
     "node_if_else",
     "node_return",
     "node_function_print",
+    "node_function_read_in",
 };
 enum {
   NODE_BINARY_OP,
@@ -45,6 +46,8 @@ enum {
   NODE_IF_ELSE,
   NODE_RETURN,
   NODE_FUNCTION_PRINT,
+  NODE_FUNCTION_READ_IN,
+
 };
 
 // NECESSARY
@@ -73,5 +76,6 @@ int parserIsAtEnd(Parser *p);
 AstNode *parseProgram(Parser *p, SymbolTable *table);
 AstNode *parseFunction(Parser *p);
 AstNode *functionCall(Parser *p);
+AstNode *parseReadIn(Parser *p);
 int isKeyword(char *);
 #endif // PRASER_H

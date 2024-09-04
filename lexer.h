@@ -26,6 +26,7 @@ enum {
   TOKEN_MINUS,
   TOKEN_DIVIDE,
   TOKEN_MULTIPLY,
+  TOKEN_MODULO,
 
   // relational operators
   TOKEN_GREATER,
@@ -45,6 +46,7 @@ enum {
   TOKEN_RETURN,
   TOKEN_FN,
   TOKEN_PRINT,
+  TOKEN_READ_IN,
 
 };
 
@@ -72,6 +74,7 @@ static const char *tokenNames[] = {
     "-",
     "/",
     "*",
+    "%",
 
     // relational operators
     " >",
@@ -92,6 +95,7 @@ static const char *tokenNames[] = {
     "return",
     "fn",
     "println",
+    "readIn",
 };
 
 typedef int TokenType;

@@ -105,12 +105,17 @@ TokenType getKeywordTokenType(char *buff) {
   if (strcmp(buff, "println") == 0) {
     return TOKEN_PRINT;
   }
+  if (strcmp(buff, "readIn") == 0) {
+    return TOKEN_READ_IN;
+  }
   return -1;
 }
 
 int isNotTypeKeyword(char *name) {
-  int arraySize = 6;
-  const char *keywords[] = {"if", "fn", "else", "for", "return", "println"};
+  int arraySize = 7;
+  const char *keywords[] = {"if",     "fn",      "else",  "for",
+                            "return", "println", "readIn"};
+
   for (int i = 0; i < arraySize; i++) {
     if (strcmp(keywords[i], name) == 0) {
       return 1;
@@ -269,6 +274,14 @@ Token *GetNextToken(Lexer *l) {
   if (c == '-') {
     if (!isAtEnd(l)) {
       return NewToken(TOKEN_MINUS, "-");
+    }
+    printf("invalid expression \n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (c == '%') {
+    if (!isAtEnd(l)) {
+      return NewToken(TOKEN_MODULO, "%");
     }
     printf("invalid expression \n");
     exit(EXIT_FAILURE);

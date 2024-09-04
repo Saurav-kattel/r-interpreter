@@ -71,7 +71,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
     Result *res = EvalAst(node->expr, p);
     return res;
   }
-
   case NODE_NUMBER: {
     Result *res = newResult(&node->number, NODE_NUMBER, sizeof(node->number));
     return res;
@@ -82,6 +81,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
                  node->isParam);
     break;
   }
+
   case NODE_FUNCTION: {
     SymbolTableEntry *sym =
         lookupFnSymbol(p->table, node->function.defination.name);
@@ -95,6 +95,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
         p->table, node->function.defination.name,
         node->function.defination.returnType, node->function.defination.params,
         node->function.defination.body, node->function.defination.paramsCount);
+
     for (int i = 0; i < node->function.defination.paramsCount; i++) {
       Result *res = EvalAst(node->function.defination.params[i], p);
       if (res) {
@@ -114,12 +115,26 @@ Result *EvalAst(AstNode *node, Parser *p) {
     // update the func symbol table params with the value of args
     for (int i = 0; i < node->function.call.argsCount; i++) {
       Result *res = EvalAst(node->function.call.args[i], p);
+      char *paramType = sym->function.parameters[i]->identifier.type;
+
+      if (strcmp(paramType, getDataType(res)) != 0) {
+        printParseError(p, "expected argument of type %s but got %s", paramType,
+                        getDataType(res));
+        exit(EXIT_FAILURE);
+      }
 
       updateSymbolTableValue(p->table,
                              sym->function.parameters[i]->identifier.name, res,
                              sym->function.parameters[i]->identifier.type);
     }
     Result *value = EvalAst(sym->function.functionBody, p);
+    if (strcmp(sym->function.returnType, getDataType(value)) != 0) {
+      printParseError(p,
+                      " cannot return %s "
+                      "from the function with the return type of %s ",
+                      getDataType(value), sym->function.returnType);
+      exit(EXIT_FAILURE);
+    }
     return value;
   }
 
@@ -139,6 +154,10 @@ Result *EvalAst(AstNode *node, Parser *p) {
       case TOKEN_MINUS:
         return newResult(&(double){leftVal - rightVal}, NODE_NUMBER,
                          sizeof(double));
+      case TOKEN_MODULO:
+        return newResult(&(int){(int)leftVal % (int)rightVal}, NODE_NUMBER,
+                         sizeof(double));
+
       case TOKEN_MULTIPLY:
         return newResult(&(double){leftVal * rightVal}, NODE_NUMBER,
                          sizeof(double));
@@ -169,26 +188,19 @@ Result *EvalAst(AstNode *node, Parser *p) {
       case TOKEN_OR:
         return newResult(&(double){(leftVal || rightVal)}, NODE_NUMBER,
                          sizeof(double));
-
       default:
         printf("Error: Unknown binary operator\n");
         exit(EXIT_FAILURE);
       }
     } else if (left->NodeType == NODE_STRING_LITERAL &&
                right->NodeType == NODE_STRING_LITERAL) {
-
-      free(left->result);
-      free(right->result);
-      free(left);
-      free(right);
       char *leftStr = trimQuotes((char *)left->result);
       char *rightStr = trimQuotes((char *)right->result);
 
       size_t len1 = strlen(leftStr);
       size_t len2 = strlen(rightStr);
 
-      char *concatenated =
-          (char *)malloc(len1 + len2 + 1); // +1 for null terminator
+      char *concatenated = (char *)malloc(len1 + len2 + 1);
       if (concatenated == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
         exit(1);
@@ -196,6 +208,12 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
       strcpy(concatenated, leftStr);
       strcat(concatenated, rightStr);
+
+      free(left->result);
+      free(right->result);
+      free(left);
+      free(right);
+
       return newResult(concatenated, NODE_STRING_LITERAL, len1 + len2 + 1);
     } else {
 
@@ -239,7 +257,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
     if (strcmp(var->type, "string") == 0) {
       return newResult(var->value, NODE_STRING_LITERAL, sizeof(var->value));
     }
-
     return newResult(var->value, NODE_NUMBER, sizeof(var->value));
   }
 
@@ -349,7 +366,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
       }
     } else if (node->ifElseBlock.elseBlock != NULL) {
       Result *val = EvalAst(node->ifElseBlock.elseBlock, p);
-      if (val->NodeType == NODE_RETURN) {
+      if (val && val->NodeType == NODE_RETURN) {
         return val;
       } else if (val) {
         free(val->result);
@@ -357,6 +374,47 @@ Result *EvalAst(AstNode *node, Parser *p) {
       }
     }
     break;
+  }
+
+  case NODE_FUNCTION_READ_IN: {
+    int initalBufferSize = 100;
+    int currentBufferSize = 0;
+    char *buffer = (char *)malloc(sizeof(char) * initalBufferSize);
+    while (1) {
+      if (currentBufferSize >= initalBufferSize - 1) {
+        initalBufferSize += 100;
+        buffer = realloc(buffer, initalBufferSize);
+      }
+
+      char ch = getchar();
+      if (ch == '\n') {
+        break;
+      }
+      buffer[currentBufferSize] = ch;
+      currentBufferSize++;
+    }
+
+    buffer[currentBufferSize] = '\0';
+    Result *res = NULL;
+
+    if (strcmp(node->read.type, "string") == 0) {
+      res = newResult(buffer, NODE_STRING_LITERAL, strlen(buffer));
+    } else if (strcmp(node->read.type, "number") == 0) {
+      double numberValue;
+      sscanf(buffer, "%lf", &numberValue);
+
+      // Allocate memory for the double value
+      double *ptr = (double *)malloc(sizeof(double));
+      if (ptr == NULL) {
+        perror("Failed to allocate memory");
+        exit(EXIT_FAILURE);
+      }
+      *ptr = numberValue; // Store the parsed value in the allocated memory
+
+      res = newResult((void *)ptr, NODE_NUMBER, strlen(buffer));
+    }
+    free(buffer);
+    return res;
   }
 
   case NODE_FUNCTION_PRINT: {
@@ -511,6 +569,7 @@ void freeAst(AstNode *node) {
     for (int i = 0; i < node->print.statementCount; i++) {
       freeAst(node->print.statments[i]);
     }
+    free(node->print.statments);
     break;
   }
 

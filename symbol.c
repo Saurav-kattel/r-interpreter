@@ -2,7 +2,6 @@
 #include "common.h"
 #include "parser.h"
 
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +20,7 @@ void printSymbolTable(SymbolTable *table) {
                sym.value ? (char *)sym.value : "NULL", table->currentScope);
       } else if (strcmp(sym.type, "number") == 0) {
         printf("%s\t\t%s\t%d\t%lf\t\t%d\n", sym.symbol, sym.type, sym.scope,
-               *(double *)sym.value, table->currentScope);
+               sym.value ? *(double *)sym.value : 0, table->currentScope);
       }
     }
   }
@@ -184,7 +183,9 @@ SymbolTableEntry *lookupFnSymbol(SymbolTable *table, char *symbol) {
 }
 
 SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol, int param) {
-  // Check for NULL pointers
+  // Check for NULL pointers4
+  //
+
   if (table == NULL || symbol == NULL || table->entries == NULL) {
     return NULL; // Invalid input or empty table, return NULL
   }

@@ -158,7 +158,7 @@ void printContext(Parser *p) {
   strncpy(line, &p->lex->source[start], length);
   line[length] = '\0'; // Null-terminate the string
   // Print the entire line
-  printf(BLUE "at line" RESET);
+  printf(BLUE " at line" RESET);
   printf(GREEN "::" RESET);
   printf(CYAN "%d" RESET, p->lex->line);
   printf(GREEN "::" RESET);
@@ -170,7 +170,8 @@ void printContext(Parser *p) {
 
 int isKeyword(char *name) {
   int arraySize = 6;
-  const char *keywords[] = {"number", "string", "if", "fn", "else", "for"};
+  const char *keywords[] = {"number", "string", "if",      "fn",
+                            "else",   "for",    "println", "readIn"};
   for (int i = 0; i < arraySize; i++) {
     if (strcmp(keywords[i], name) == 0) {
       return 1;
@@ -258,8 +259,20 @@ AstNode *newReturnNode(AstNode *expression, int nodeType) {
     printf("unable to allocate new ast node\n");
     exit(EXIT_FAILURE);
   }
-  node->type = NODE_RETURN;
+  node->type = nodeType;
   node->expr = expression;
+  return node;
+}
+
+AstNode *newReadInNode(int nodeType, char *type) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+  node->type = nodeType;
+  node->read.type = strdup(type);
+  free(type);
   return node;
 }
 
@@ -386,6 +399,7 @@ AstNode *term(Parser *p) {
 
   while (p->current &&
          (p->current->type == TOKEN_MULTIPLY ||
+          p->current->type == TOKEN_MODULO ||
           p->current->type == TOKEN_DIVIDE || p->current->type == TOKEN_DOT)) {
     Token *tkn = p->current;
     consume(tkn->type, p);
@@ -446,6 +460,9 @@ AstNode *factor(Parser *p) {
   } else if (tkn->type == TOKEN_STRING) {
     AstNode *node = newStringNode(p->current->value);
     consume(TOKEN_STRING, p);
+    return node;
+  } else if (TOKEN_READ_IN) {
+    AstNode *node = parseReadIn(p);
     return node;
   }
   printParseError(p,
@@ -810,7 +827,7 @@ AstNode *parseFnArguments(Parser *p) {
 
   case TOKEN_IDEN: {
     AstNode *ast = newIdentifierNode(NULL, p->current->value, NULL, p,
-                                     NODE_IDENTIFIER_VALUE, 1);
+                                     NODE_IDENTIFIER_VALUE, 0);
     consume(TOKEN_IDEN, p);
     return ast;
   }
@@ -821,6 +838,7 @@ AstNode *parseFnArguments(Parser *p) {
 
 AstNode *newFnCallNode(char *fnName, int argsCount, AstNode **callArgs) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+
   if (!node) {
     printf("failed allocating memory for the ast\n");
     exit(EXIT_FAILURE);
@@ -907,4 +925,25 @@ AstNode *parsePrint(Parser *p) {
 
   consume(TOKEN_RPAREN, p);
   return newPrintNode(stmts, currentSize);
+}
+
+AstNode *parseReadIn(Parser *p) {
+
+  if (p->current->type != TOKEN_READ_IN) {
+    printParseError(p, "expected token %s but got %s\n",
+                    tokenNames[TOKEN_READ_IN], tokenNames[p->current->type]);
+    exit(EXIT_FAILURE);
+  }
+  consume(TOKEN_READ_IN, p);
+
+  consume(TOKEN_LPAREN, p);
+  char *type = strdup(p->current->value);
+  if (!checkValidType(p->current)) {
+    printParseError(p, "unknown type parameter %s\n", type);
+    free(type);
+    exit(EXIT_FAILURE);
+  }
+  consume(TOKEN_IDEN, p);
+  consume(TOKEN_RPAREN, p);
+  return newReadInNode(NODE_FUNCTION_READ_IN, type);
 }
