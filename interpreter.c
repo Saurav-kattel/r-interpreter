@@ -73,6 +73,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
     res->isReturn = 1;
     return res;
   }
+
   case NODE_NUMBER: {
     Result *res = newResult(&node->number, NODE_NUMBER, sizeof(node->number));
     return res;
@@ -254,13 +255,15 @@ Result *EvalAst(AstNode *node, Parser *p) {
   case NODE_IDENTIFIER_VALUE: {
     SymbolTableEntry *var =
         lookupSymbol(p->table, node->identifier.name, node->isParam);
+
     if (!var) {
       printParseError(p, "%s is not decleared\n", node->identifier.name);
       exit(EXIT_FAILURE);
     }
 
     if (strcmp(var->type, "string") == 0) {
-      return newResult(var->value, NODE_STRING_LITERAL, sizeof(var->value));
+      return newResult((char *)var->value, NODE_STRING_LITERAL,
+                       sizeof(var->value));
     }
     return newResult(var->value, NODE_NUMBER, sizeof(var->value));
   }
@@ -273,6 +276,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
       printParseError(p, "%s is not decleared\n", node->identifier.name);
       exit(EXIT_FAILURE);
     }
+    printf("the value of var is %lf\n", *(double *)var->value);
 
     Result *res = EvalAst(node->identifier.value, p);
     char *type = getDataType(res);
@@ -445,6 +449,46 @@ Result *EvalAst(AstNode *node, Parser *p) {
     return res;
   }
 
+  case NODE_WHILE_LOOP: {
+    Result *result = EvalAst(node->whileLoop.condition, p);
+    double condition = *(double *)result->result;
+
+    while (condition) {
+      free(result);
+
+      Result *blockRes = EvalAst(node->whileLoop.body, p);
+      if (blockRes && blockRes->isReturn) {
+        return blockRes;
+      }
+
+      // free  the result if result is valid and is not a type of return
+      if (blockRes && blockRes->isContinue) {
+        free(blockRes->result);
+        free(blockRes);
+        result = EvalAst(node->whileLoop.condition, p);
+        condition = *(double *)result->result;
+        continue; // Skip the rest of the loop body
+      }
+
+      // Handle break: exit the loop
+      if (blockRes && blockRes->isBreak) {
+        free(blockRes->result);
+        free(blockRes);
+        break; // Exit the loop
+      }
+
+      if (blockRes) {
+        free(blockRes->result);
+        free(blockRes);
+      }
+
+      Result *newRes = EvalAst(node->whileLoop.condition, p);
+      condition = *(double *)newRes->result;
+      free(newRes);
+    }
+    break;
+  }
+
   case NODE_FOR_LOOP: {
     // initialize the variable at first
     EvalAst(node->loopFor.initializer, p);
@@ -455,8 +499,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
       Result *blockRes = EvalAst(node->loopFor.loopBody, p);
 
       if (blockRes && blockRes->isReturn) {
-        free(result->result);
-        free(result);
         return blockRes;
       }
 
@@ -743,6 +785,9 @@ AstNode *parseAst(Parser *p) {
     AstNode *ast = parseReturn(p);
     consume(TOKEN_SEMI_COLON, p);
     return ast;
+  }
+  case TOKEN_WHILE: {
+    return parseWhileNode(p);
   }
   case TOKEN_EOF:
     return NULL;

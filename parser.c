@@ -223,6 +223,18 @@ int checkValidType(Token *typeToken) {
 
 // -------------------------for parsing ast -----------------------
 
+AstNode *newWhileNode(AstNode *condition, AstNode *body) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+  node->type = NODE_WHILE_LOOP;
+  node->whileLoop.body = body;
+  node->whileLoop.condition = condition;
+  return node;
+}
+
 AstNode *newBreakNode() {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
@@ -1037,4 +1049,17 @@ AstNode *parseContinueNode(Parser *p) {
   }
   consume(TOKEN_CONTINUE, p);
   return newContinueNode();
+}
+
+AstNode *parseWhileNode(Parser *p) {
+  if (p->current->type != TOKEN_WHILE) {
+    printParseError(p, "expected for but got %s", tokenNames[p->current->type]);
+    exit(EXIT_FAILURE);
+  }
+  consume(TOKEN_WHILE, p);
+  consume(TOKEN_LPAREN, p);
+  AstNode *condition = logical(p);
+  consume(TOKEN_RPAREN, p);
+  AstNode *body = parseBlockStmt(p);
+  return newWhileNode(condition, body);
 }

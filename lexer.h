@@ -40,6 +40,7 @@ enum {
   TOKEN_OR,
   TOKEN_NOT,
 
+  // KEY WORDS
   TOKEN_IF,
   TOKEN_ELSE,
   TOKEN_FOR,
@@ -49,6 +50,7 @@ enum {
   TOKEN_READ_IN,
   TOKEN_BREAK,
   TOKEN_CONTINUE,
+  TOKEN_WHILE,
 
 };
 
@@ -91,6 +93,7 @@ static const char *tokenNames[] = {
     "||",
     "!",
 
+    // key words
     "if",
     "else",
     "for",
@@ -100,6 +103,7 @@ static const char *tokenNames[] = {
     "readIn",
     "break",
     "continue",
+    "while",
 };
 
 typedef int TokenType;

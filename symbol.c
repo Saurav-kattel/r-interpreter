@@ -238,8 +238,8 @@ void exitScope(SymbolTable *table) {
 
 void updateSymbolTableValue(SymbolTable *table, char *varName, Result *value,
                             char *type) {
-  SymbolTableEntry *sym = lookupSymbol(table, varName, 0);
 
+  SymbolTableEntry *sym = lookupSymbol(table, varName, 0);
   if (strcmp(sym->type, type) != 0) {
     printf("cannot assing type of %s to type of %s\n", type, sym->type);
     exit(EXIT_FAILURE);
@@ -251,11 +251,10 @@ void updateSymbolTableValue(SymbolTable *table, char *varName, Result *value,
   }
   if (value != NULL) {
     if (strcmp(type, "string") == 0) {
-
       if (sym->value) {
         free(sym->value);
       }
-      sym->value = strdup(value->result);
+      sym->value = strdup((char *)value->result);
     } else {
       sym->value = (double *)value->result;
     }

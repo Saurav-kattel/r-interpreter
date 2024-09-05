@@ -62,6 +62,12 @@ struct AstNode {
       AstNode **statments;
       int statementCount;
     } print;
+
+    struct {
+      AstNode *body;
+      AstNode *condition;
+    } whileLoop;
+
     struct {
       struct AstNode *left;
       struct AstNode *right;
