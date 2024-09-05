@@ -17,6 +17,7 @@ typedef struct SymbolTable {
 typedef struct Result {
   int NodeType;
   void *result;
+  int isReturn;
 } Result;
 
 typedef struct {

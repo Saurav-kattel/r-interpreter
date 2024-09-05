@@ -16,6 +16,7 @@ Result *newResult(void *data, int nodeType, size_t dataSize) {
   } else {
     res->result = (double *)data;
   }
+  res->isReturn = 0;
   return res;
 }
 
@@ -69,6 +70,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
   case NODE_RETURN: {
     Result *res = EvalAst(node->expr, p);
+    res->isReturn = 1;
     return res;
   }
   case NODE_NUMBER: {
@@ -127,7 +129,9 @@ Result *EvalAst(AstNode *node, Parser *p) {
                              sym->function.parameters[i]->identifier.name, res,
                              sym->function.parameters[i]->identifier.type);
     }
+
     Result *value = EvalAst(sym->function.functionBody, p);
+
     if (strcmp(sym->function.returnType, getDataType(value)) != 0) {
       printParseError(p,
                       " cannot return %s "
@@ -135,6 +139,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
                       getDataType(value), sym->function.returnType);
       exit(EXIT_FAILURE);
     }
+
     return value;
   }
 
@@ -334,13 +339,14 @@ Result *EvalAst(AstNode *node, Parser *p) {
     enterScope(p->table);
     for (int i = 0; i < node->block.statementCount; i++) {
       AstNode *ast = node->block.statements[i];
-      Result *res = EvalAst(ast, p);
-      if (ast->type == NODE_RETURN) {
+      Result *result = EvalAst(ast, p);
+      if (result->isReturn) {
         exitScope(p->table);
-        return res;
+        return result;
       }
-      freeResult(res);
+      freeResult(result);
     };
+
     exitScope(p->table);
     return NULL;
   }
@@ -355,25 +361,20 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
 
     double conditionValue = *(double *)(conditionResult->result);
-
     if (conditionValue) {
       Result *val = EvalAst(node->ifElseBlock.ifBlock, p);
-      if (val && val->NodeType == NODE_RETURN) {
+      if (val) {
+        printf("val res %s\n", (char *)val->result);
         return val;
-      } else if (val) {
-        free(val->result);
-        free(val);
       }
     } else if (node->ifElseBlock.elseBlock != NULL) {
       Result *val = EvalAst(node->ifElseBlock.elseBlock, p);
-      if (val && val->NodeType == NODE_RETURN) {
+      if (val) {
         return val;
-      } else if (val) {
-        free(val->result);
-        free(val);
       }
+
+      break;
     }
-    break;
   }
 
   case NODE_FUNCTION_READ_IN: {
