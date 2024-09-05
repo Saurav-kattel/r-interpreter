@@ -237,6 +237,21 @@ AstNode *newPrintNode(AstNode **stmts, int currentSize) {
   return node;
 }
 
+AstNode *newForLoopNode(AstNode *initalizer, AstNode *conditon, AstNode *icrDcr,
+                        AstNode *loopBody) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+  node->type = NODE_FOR_LOOP;
+  node->loopFor.icrDcr = icrDcr;
+  node->loopFor.condition = conditon;
+  node->loopFor.initializer = initalizer;
+  node->loopFor.loopBody = loopBody;
+  return node;
+}
+
 AstNode *newIfElseNode(AstNode *condition, AstNode *ifBlock,
                        AstNode *elseBlock) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
@@ -439,16 +454,21 @@ AstNode *factor(Parser *p) {
     exit(EXIT_FAILURE);
   }
 
-  if (tkn->type == TOKEN_NUMBER) {
+  switch (tkn->type) {
+  case TOKEN_NUMBER: {
     double value = convertStrToDouble(tkn->value);
     consume(TOKEN_NUMBER, p);
     return newNumberNode(value);
-  } else if (tkn->type == TOKEN_LPAREN) {
+  }
+  case TOKEN_LPAREN: {
     consume(TOKEN_LPAREN, p);
-    AstNode *node = logical(p); // Assuming logical handles expressions
+    AstNode *node = logical(p);
     consume(TOKEN_RPAREN, p);
     return node;
-  } else if (tkn->type == TOKEN_IDEN) {
+  }
+
+  case TOKEN_IDEN: {
+
     if (parserPeek(p)->type == TOKEN_LPAREN) {
       return functionCall(p);
     }
@@ -457,20 +477,29 @@ AstNode *factor(Parser *p) {
         newIdentifierNode("", tkn->value, NULL, p, NODE_IDENTIFIER_VALUE, 0);
     consume(TOKEN_IDEN, p);
     return node;
-  } else if (tkn->type == TOKEN_STRING) {
+  }
+
+  case TOKEN_STRING: {
     AstNode *node = newStringNode(p->current->value);
     consume(TOKEN_STRING, p);
     return node;
-  } else if (TOKEN_READ_IN) {
+  }
+
+  case TOKEN_READ_IN: {
     AstNode *node = parseReadIn(p);
     return node;
   }
-  printParseError(p,
-                  "Unexpected token %s with value '%s'. Expected number, "
-                  "parenthesis, "
-                  "or identifier.\n",
-                  tokenNames[tkn->type], tkn->value);
-  exit(EXIT_FAILURE);
+  case TOKEN_FOR: {
+    return parseForLoop(p);
+  }
+  default:
+    printParseError(p,
+                    "Unexpected token %s with value '%s'. Expected number, "
+                    "parenthesis, "
+                    "or identifier.\n",
+                    tokenNames[tkn->type], tkn->value);
+    exit(EXIT_FAILURE);
+  }
 }
 
 AstNode *relational(Parser *p) {
@@ -644,7 +673,6 @@ AstNode *varDecleration(Parser *p) {
   free(varName);
   return node;
 }
-
 void addStatementToBlock(AstNode *blockNode, AstNode *statement) {
   if (blockNode->type != NODE_BLOCK) {
     printf("Error: Attempting to add a statement to a non-block node.\n");
@@ -946,4 +974,29 @@ AstNode *parseReadIn(Parser *p) {
   consume(TOKEN_IDEN, p);
   consume(TOKEN_RPAREN, p);
   return newReadInNode(NODE_FUNCTION_READ_IN, type);
+}
+
+AstNode *parseForLoop(Parser *p) {
+  if (p->current->type != TOKEN_FOR) {
+    printParseError(p, "expected for but got %s", tokenNames[p->current->type]);
+    exit(EXIT_FAILURE);
+  }
+  consume(TOKEN_FOR, p);
+  consume(TOKEN_LPAREN, p);
+
+  AstNode *initializer = varDecleration(p);
+  consume(TOKEN_SEMI_COLON, p);
+
+  AstNode *condition = logical(p);
+  consume(TOKEN_SEMI_COLON, p);
+
+  AstNode *icrDcr = varDecleration(p);
+  consume(TOKEN_RPAREN, p);
+
+  if (p->current->type != TOKEN_LCURLY) {
+    printParseError(p, "expected { but got %s", tokenNames[p->current->type]);
+    exit(EXIT_FAILURE);
+  }
+  AstNode *loopBody = parseBlockStmt(p);
+  return newForLoopNode(initializer, condition, icrDcr, loopBody);
 }

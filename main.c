@@ -88,6 +88,10 @@ int main(int argc, char **argv) {
   prog->capacity = 10;
   prog->program = (AstNode **)malloc(sizeof(AstNode) * prog->capacity);
 
+  for (int i = 0; i < p->size; i++) {
+    printf("%s\n", tokenNames[p->tokens[i]->type]);
+  }
+
   while (p->current->type != TOKEN_EOF) {
 
     AstNode *ast = parseAst(p);

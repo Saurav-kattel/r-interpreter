@@ -340,11 +340,13 @@ Result *EvalAst(AstNode *node, Parser *p) {
     for (int i = 0; i < node->block.statementCount; i++) {
       AstNode *ast = node->block.statements[i];
       Result *result = EvalAst(ast, p);
-      if (result->isReturn) {
+      if (result && result->isReturn) {
         exitScope(p->table);
         return result;
       }
-      freeResult(result);
+      if (result) {
+        freeResult(result);
+      }
     };
 
     exitScope(p->table);
@@ -434,8 +436,41 @@ Result *EvalAst(AstNode *node, Parser *p) {
     printf("\n");
     break;
   }
+
+  case NODE_FOR_LOOP: {
+    // initialize the variable at first
+    EvalAst(node->loopFor.initializer, p);
+    Result *result = EvalAst(node->loopFor.condition, p);
+    double condition = *(double *)result->result;
+    while (condition) {
+
+      // evaluates the body
+      Result *blockRes = EvalAst(node->loopFor.loopBody, p);
+      if (blockRes && blockRes->isReturn) {
+        free(result->result);
+        free(result);
+        return blockRes;
+      }
+
+      // free  the result if result is valid and is not a type of return
+      if (blockRes) {
+        free(blockRes->result);
+        free(blockRes);
+      }
+
+      // handle the icrDcr statement
+      EvalAst(node->loopFor.icrDcr, p);
+      // free the previous resul
+      //    freeResult(result);
+      // // check the conditon with new value
+      result = EvalAst(node->loopFor.condition, p);
+      condition = *(double *)result->result;
+    }
+    break;
+  }
+
   default:
-    printf("Error: Unexpected node type %d\n", node->type);
+    printf("Error: Unexpected node type %s\n", nodeTypeNames[node->type]);
     exit(EXIT_FAILURE);
   }
 
@@ -474,6 +509,23 @@ void freeAst(AstNode *node) {
       node->identifier.name = NULL;
     }
     break;
+  case NODE_FOR_LOOP: {
+    if (node->loopFor.loopBody) {
+      freeAst(node->loopFor.loopBody);
+    }
+
+    if (node->loopFor.condition) {
+      freeAst(node->loopFor.condition);
+    }
+    if (node->loopFor.icrDcr) {
+      freeAst(node->loopFor.icrDcr);
+    }
+    if (node->loopFor.initializer) {
+      freeAst(node->loopFor.initializer);
+    }
+    break;
+  }
+
   case NODE_FUNCTION:
     if (node->function.defination.returnType) {
       free(node->function.defination.returnType);
@@ -636,6 +688,9 @@ AstNode *parseAst(Parser *p) {
     // Assuming statements end with a semicolon
     return numberNode;
   }
+
+  case TOKEN_FOR:
+    return parseForLoop(p);
 
   case TOKEN_IF:
     // Handle if-else statements

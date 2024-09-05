@@ -87,6 +87,13 @@ struct AstNode {
     } block;
 
     struct {
+      AstNode *initializer;
+      AstNode *condition;
+      AstNode *icrDcr;
+      AstNode *loopBody;
+    } loopFor;
+
+    struct {
       struct AstNode *condition;
       struct AstNode *ifBlock;
       struct AstNode *elseBlock;
