@@ -116,12 +116,19 @@ typedef struct {
 } Lexer;
 
 typedef struct {
+  char *file_name;
+  int row; // line number
+  int col; // position on the line number
+} Loc;
+
+typedef struct {
   TokenType type;
   char *value;
+  Loc *loc;
 } Token;
 
 Lexer *InitLexer(char *, char *);
-Token *NewToken(TokenType, char *);
+Token *NewToken(Lexer *lex, TokenType type, char *value);
 Token *GetNextToken(Lexer *);
 char peek(Lexer *);
 char peekNext(Lexer *);

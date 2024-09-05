@@ -81,8 +81,8 @@ AstNode *parseWhileNode(Parser *p);
 Parser *InitParser(Lexer *, SymbolTable *);
 void freeAst(AstNode *);
 void consume(TokenType, Parser *);
-void printParseError(Parser *p, const char *s, ...);
-void printContext(Parser *p);
+void printError(Token *, const char *s, ...);
+void printContext(Token *);
 int checkValidType(Token *);
 int parserIsAtEnd(Parser *p);
 // MIGHT BE NEEDED

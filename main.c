@@ -19,6 +19,11 @@ void shiftArgs(int *argc, char **argv) { (*argc) = (*argc) - 1; }
 
 void freeTokens(Token *tkn) {
   if (tkn) {
+    if (tkn->loc) {
+      free(tkn->loc->file_name);
+      free(tkn->loc);
+    }
+
     if (tkn->value) {
       free(tkn->value);
     }

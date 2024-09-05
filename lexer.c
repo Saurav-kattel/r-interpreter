@@ -42,10 +42,18 @@ Lexer *InitLexer(char *source, char *filename) {
   return lex;
 }
 // Returns  a new token with the supplied value and type
-Token *NewToken(TokenType type, char *value) {
+Token *NewToken(Lexer *lex, TokenType type, char *value) {
   Token *tkn = (Token *)malloc(sizeof(Token));
   tkn->type = type;
   tkn->value = strdup(value);
+  tkn->loc = (Loc *)malloc(sizeof(Loc));
+  if (!tkn->loc) {
+    printf("cannot allocate mem for loc\n");
+    exit(EXIT_FAILURE);
+  }
+  tkn->loc->file_name = strdup(lex->filename);
+  tkn->loc->row = lex->line;
+  tkn->loc->col = lex->curr;
   return tkn;
 }
 
@@ -161,7 +169,7 @@ Token *GetNextToken(Lexer *l) {
     }
     buffer[length] = '\0';
 
-    Token *tkn = NewToken(TOKEN_STRING, buffer);
+    Token *tkn = NewToken(l, TOKEN_STRING, buffer);
     free(buffer);
     return tkn;
   }
@@ -191,12 +199,12 @@ Token *GetNextToken(Lexer *l) {
         printf("unkwon type\n");
         exit(EXIT_FAILURE);
       }
-      Token *tkn = NewToken(type, buffer);
+      Token *tkn = NewToken(l, type, buffer);
       free(buffer);
       return tkn;
     }
 
-    Token *tkn = NewToken(TOKEN_IDEN, buffer);
+    Token *tkn = NewToken(l, TOKEN_IDEN, buffer);
     free(buffer);
     return tkn;
   }
@@ -217,7 +225,7 @@ Token *GetNextToken(Lexer *l) {
     char *buffer = (char *)malloc(length + 1);
     strncpy(buffer, l->source + start, length);
     buffer[length] = '\0';
-    Token *tkn = NewToken(TOKEN_NUMBER, buffer);
+    Token *tkn = NewToken(l, TOKEN_NUMBER, buffer);
     free(buffer);
     return tkn;
   }
@@ -228,41 +236,41 @@ Token *GetNextToken(Lexer *l) {
 
   if (c == '(') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_LPAREN, "(");
+      return NewToken(l, TOKEN_LPAREN, "(");
     }
     printf("unexpected token (\n");
   }
 
   if (c == ')') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_RPAREN, ")");
+      return NewToken(l, TOKEN_RPAREN, ")");
     }
     printf("unexpected token )\n");
   }
 
   if (c == '{') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_LCURLY, "{");
+      return NewToken(l, TOKEN_LCURLY, "{");
     }
     printf("unexpected token {\n");
   }
 
   if (c == ',') {
-    return NewToken(TOKEN_COMMA, ",");
+    return NewToken(l, TOKEN_COMMA, ",");
   }
 
   if (c == '}') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_RCURLY, "}");
+      return NewToken(l, TOKEN_RCURLY, "}");
     }
     printf("should not happen\n");
   }
 
   if (c == ';') {
-    return NewToken(TOKEN_SEMI_COLON, ";");
+    return NewToken(l, TOKEN_SEMI_COLON, ";");
   }
   if (c == '.') {
-    return NewToken(TOKEN_DOT, ".");
+    return NewToken(l, TOKEN_DOT, ".");
   }
 
   if (c == '#') {
@@ -271,11 +279,11 @@ Token *GetNextToken(Lexer *l) {
       advance(l);
     }
     advance(l);
-    return NewToken(TOKEN_COMMENT, "");
+    return NewToken(l, TOKEN_COMMENT, "");
   }
 
   if (c == ':') {
-    return NewToken(TOKEN_COLON, ":");
+    return NewToken(l, TOKEN_COLON, ":");
   }
   //
   //___________________________-Arthemetic
@@ -283,7 +291,7 @@ Token *GetNextToken(Lexer *l) {
 
   if (c == '-') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_MINUS, "-");
+      return NewToken(l, TOKEN_MINUS, "-");
     }
     printf("invalid expression \n");
     exit(EXIT_FAILURE);
@@ -291,7 +299,7 @@ Token *GetNextToken(Lexer *l) {
 
   if (c == '%') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_MODULO, "%");
+      return NewToken(l, TOKEN_MODULO, "%");
     }
     printf("invalid expression \n");
     exit(EXIT_FAILURE);
@@ -299,7 +307,7 @@ Token *GetNextToken(Lexer *l) {
 
   if (c == '+') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_PLUS, "+");
+      return NewToken(l, TOKEN_PLUS, "+");
     }
     printf("invalid expression \n");
     exit(EXIT_FAILURE);
@@ -307,7 +315,7 @@ Token *GetNextToken(Lexer *l) {
 
   if (c == '/') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_DIVIDE, "/");
+      return NewToken(l, TOKEN_DIVIDE, "/");
     }
     printf("invalid expression \n");
     exit(EXIT_FAILURE);
@@ -315,14 +323,14 @@ Token *GetNextToken(Lexer *l) {
 
   if (c == '*') {
     if (!isAtEnd(l)) {
-      return NewToken(TOKEN_MULTIPLY, "*");
+      return NewToken(l, TOKEN_MULTIPLY, "*");
     }
     printf("invalid expression \n");
     exit(EXIT_FAILURE);
   }
 
   if (isAtEnd(l)) {
-    return NewToken(TOKEN_EOF, "EOF");
+    return NewToken(l, TOKEN_EOF, "EOF");
   }
 
   //
@@ -338,9 +346,9 @@ Token *GetNextToken(Lexer *l) {
 
     if (peek(l) == '=') {
       advance(l);
-      return NewToken(TOKEN_EQ_GREATER, ">=");
+      return NewToken(l, TOKEN_EQ_GREATER, ">=");
     }
-    return NewToken(TOKEN_GREATER, ">");
+    return NewToken(l, TOKEN_GREATER, ">");
   }
 
   if (c == '<') {
@@ -351,9 +359,9 @@ Token *GetNextToken(Lexer *l) {
 
     if (peek(l) == '=') {
       advance(l);
-      return NewToken(TOKEN_EQ_LESSER, "<=");
+      return NewToken(l, TOKEN_EQ_LESSER, "<=");
     }
-    return NewToken(TOKEN_LESSER, "<");
+    return NewToken(l, TOKEN_LESSER, "<");
   }
 
   if (c == '=') {
@@ -364,9 +372,9 @@ Token *GetNextToken(Lexer *l) {
 
     if (peek(l) == '=') {
       advance(l);
-      return NewToken(TOKEN_DB_EQUAL, "==");
+      return NewToken(l, TOKEN_DB_EQUAL, "==");
     }
-    return NewToken(TOKEN_ASSIGN, "=");
+    return NewToken(l, TOKEN_ASSIGN, "=");
   }
 
   //
@@ -382,7 +390,7 @@ Token *GetNextToken(Lexer *l) {
 
     if (peek(l) == '&') {
       advance(l);
-      return NewToken(TOKEN_AND, "&&");
+      return NewToken(l, TOKEN_AND, "&&");
     }
     printf("unknown token & were you trying to ues &&\n");
     exit(EXIT_FAILURE);
@@ -396,7 +404,7 @@ Token *GetNextToken(Lexer *l) {
 
     if (peek(l) == '|') {
       advance(l);
-      return NewToken(TOKEN_OR, "||");
+      return NewToken(l, TOKEN_OR, "||");
     }
     printf("unknown token | were you trying to ues ||\n");
     exit(EXIT_FAILURE);
@@ -410,9 +418,9 @@ Token *GetNextToken(Lexer *l) {
 
     if (peek(l) == '=') {
       advance(l);
-      return NewToken(TOKEN_EQ_NOT, "!=");
+      return NewToken(l, TOKEN_EQ_NOT, "!=");
     }
-    return NewToken(TOKEN_NOT, "!");
+    return NewToken(l, TOKEN_NOT, "!");
   }
 
   printf("unknown token %c\n", c);
