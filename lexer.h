@@ -47,6 +47,8 @@ enum {
   TOKEN_FN,
   TOKEN_PRINT,
   TOKEN_READ_IN,
+  TOKEN_BREAK,
+  TOKEN_CONTINUE,
 
 };
 
@@ -96,6 +98,8 @@ static const char *tokenNames[] = {
     "fn",
     "println",
     "readIn",
+    "break",
+    "continue",
 };
 
 typedef int TokenType;

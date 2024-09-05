@@ -30,6 +30,8 @@ static const char *nodeTypeNames[] = {
     "node_function_print",
     "node_function_read_in",
     "node_for_loop",
+    "node_break",
+    "node_contnue",
 };
 enum {
   NODE_BINARY_OP,
@@ -49,6 +51,8 @@ enum {
   NODE_FUNCTION_PRINT,
   NODE_FUNCTION_READ_IN,
   NODE_FOR_LOOP,
+  NODE_BREAK,
+  NODE_CONTNUE,
 };
 
 // NECESSARY
@@ -66,6 +70,9 @@ AstNode *parseStatement(Parser *p);
 AstNode *parseReturn(Parser *p);
 AstNode *parsePrint(Parser *p);
 AstNode *parseForLoop(Parser *p);
+AstNode *parseBreakNode(Parser *p);
+AstNode *parseContinueNode(Parser *p);
+
 // utils
 Parser *InitParser(Lexer *, SymbolTable *);
 void freeAst(AstNode *);

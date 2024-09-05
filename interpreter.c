@@ -340,12 +340,10 @@ Result *EvalAst(AstNode *node, Parser *p) {
     for (int i = 0; i < node->block.statementCount; i++) {
       AstNode *ast = node->block.statements[i];
       Result *result = EvalAst(ast, p);
-      if (result && result->isReturn) {
+      if (result &&
+          (result->isReturn || result->isBreak || result->isContinue)) {
         exitScope(p->table);
         return result;
-      }
-      if (result) {
-        freeResult(result);
       }
     };
 
@@ -366,7 +364,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
     if (conditionValue) {
       Result *val = EvalAst(node->ifElseBlock.ifBlock, p);
       if (val) {
-        printf("val res %s\n", (char *)val->result);
         return val;
       }
     } else if (node->ifElseBlock.elseBlock != NULL) {
@@ -374,9 +371,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
       if (val) {
         return val;
       }
-
-      break;
     }
+    break;
   }
 
   case NODE_FUNCTION_READ_IN: {
@@ -437,15 +433,27 @@ Result *EvalAst(AstNode *node, Parser *p) {
     break;
   }
 
+  case NODE_BREAK: {
+    Result *res = newResult(NULL, NODE_BREAK, 0);
+    res->isBreak = 1;
+    return res;
+  }
+
+  case NODE_CONTNUE: {
+    Result *res = newResult(NULL, NODE_CONTNUE, 0);
+    res->isContinue = 1;
+    return res;
+  }
+
   case NODE_FOR_LOOP: {
     // initialize the variable at first
     EvalAst(node->loopFor.initializer, p);
     Result *result = EvalAst(node->loopFor.condition, p);
     double condition = *(double *)result->result;
     while (condition) {
-
       // evaluates the body
       Result *blockRes = EvalAst(node->loopFor.loopBody, p);
+
       if (blockRes && blockRes->isReturn) {
         free(result->result);
         free(result);
@@ -453,6 +461,22 @@ Result *EvalAst(AstNode *node, Parser *p) {
       }
 
       // free  the result if result is valid and is not a type of return
+      if (blockRes && blockRes->isContinue) {
+        free(blockRes->result);
+        free(blockRes);
+        EvalAst(node->loopFor.icrDcr, p);
+        result = EvalAst(node->loopFor.condition, p);
+        condition = *(double *)result->result;
+        continue; // Skip the rest of the loop body
+      }
+
+      // Handle break: exit the loop
+      if (blockRes && blockRes->isBreak) {
+        free(blockRes->result);
+        free(blockRes);
+        break; // Exit the loop
+      }
+
       if (blockRes) {
         free(blockRes->result);
         free(blockRes);
@@ -483,6 +507,7 @@ void freeAst(AstNode *node) {
   }
 
   switch (node->type) {
+
   case NODE_IDENTIFIER_MUTATION:
   case NODE_IDENTIFIER_ASSIGNMENT:
   case NODE_IDENTIFIER_VALUE:
@@ -551,6 +576,8 @@ void freeAst(AstNode *node) {
     }
     break;
   case NODE_NUMBER:
+  case NODE_CONTNUE:
+  case NODE_BREAK:
     // No dynamic memory to free here
     break;
   case NODE_STRING_LITERAL:
@@ -689,9 +716,21 @@ AstNode *parseAst(Parser *p) {
     return numberNode;
   }
 
-  case TOKEN_FOR:
+  case TOKEN_FOR: {
     return parseForLoop(p);
+  }
 
+  case TOKEN_CONTINUE: {
+    AstNode *node = parseContinueNode(p);
+    consume(TOKEN_SEMI_COLON, p);
+    return node;
+  }
+
+  case TOKEN_BREAK: {
+    AstNode *node = parseBreakNode(p);
+    consume(TOKEN_SEMI_COLON, p);
+    return node;
+  }
   case TOKEN_IF:
     // Handle if-else statements
     return ifElseParser(p);

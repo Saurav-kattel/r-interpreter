@@ -223,7 +223,25 @@ int checkValidType(Token *typeToken) {
 
 // -------------------------for parsing ast -----------------------
 
-// parses the if else block into ast
+AstNode *newBreakNode() {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+  node->type = NODE_BREAK;
+  return node;
+}
+
+AstNode *newContinueNode() {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+  node->type = NODE_CONTNUE;
+  return node;
+}
 
 AstNode *newPrintNode(AstNode **stmts, int currentSize) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
@@ -999,4 +1017,24 @@ AstNode *parseForLoop(Parser *p) {
   }
   AstNode *loopBody = parseBlockStmt(p);
   return newForLoopNode(initializer, condition, icrDcr, loopBody);
+}
+
+AstNode *parseBreakNode(Parser *p) {
+  if (p->current->type != TOKEN_BREAK) {
+    printParseError(p, "expected break but got %s",
+                    tokenNames[p->current->type]);
+    exit(EXIT_FAILURE);
+  }
+  consume(TOKEN_BREAK, p);
+  return newBreakNode();
+}
+
+AstNode *parseContinueNode(Parser *p) {
+  if (p->current->type != TOKEN_CONTINUE) {
+    printParseError(p, "expected break but got %s",
+                    tokenNames[p->current->type]);
+    exit(EXIT_FAILURE);
+  }
+  consume(TOKEN_CONTINUE, p);
+  return newContinueNode();
 }

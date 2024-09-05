@@ -108,13 +108,19 @@ TokenType getKeywordTokenType(char *buff) {
   if (strcmp(buff, "readIn") == 0) {
     return TOKEN_READ_IN;
   }
+  if (strcmp(buff, "break") == 0) {
+    return TOKEN_BREAK;
+  }
+  if (strcmp(buff, "continue") == 0) {
+    return TOKEN_CONTINUE;
+  }
   return -1;
 }
 
 int isNotTypeKeyword(char *name) {
-  int arraySize = 7;
-  const char *keywords[] = {"if",     "fn",      "else",  "for",
-                            "return", "println", "readIn"};
+  int arraySize = 9;
+  const char *keywords[] = {"if",      "fn",     "else",  "for",     "return",
+                            "println", "readIn", "break", "continue"};
 
   for (int i = 0; i < arraySize; i++) {
     if (strcmp(keywords[i], name) == 0) {
