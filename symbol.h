@@ -26,7 +26,7 @@ void updateSymbolTableValue(SymbolTable *table, char *varName, Result *value,
 void exitScope(SymbolTable *table);
 void printFnSymbolTable(SymbolTable *);
 void insertNumArraySymbol(SymbolTable *table, char *name, char *type, int size,
-                          int *value, int isFixed);
+                          double *value, int isFixed);
 void insertStrArraySymbol(SymbolTable *table, char *name, char *type, int size,
                           char **value, int isFixed);
 

@@ -497,23 +497,30 @@ Result *EvalAst(AstNode *node, Parser *p) {
       char *name = node->print.statments[i]->array.name;
       SymbolTableEntry *entry = lookupSymbol(p->table, name, 0);
       if (entry) {
-        printf("[");
+        printf(GREEN "[" RESET);
         for (int j = 0; j < entry->arraySize; j++) {
 
-          if (((char **)entry->value)[j]) {
-            if (strcmp(entry->type, "string") == 0) {
-              printf(" %s  ", trimQuotes(((char **)entry->value)[j]));
-            } else {
-              printf(BLUE "%d " RESET, ((int *)entry->value)[j]);
+          if (strcmp(entry->type, "string") == 0) {
+            // Check if the string array element exists
+            if (((char **)entry->value)[j]) {
+              printf(YELLOW " %s " RESET, ((char **)entry->value)[j]);
+              if (j < entry->arraySize - 1) {
+                printf(MAGENTA "," RESET);
+              }
+            }
+          } else {
+            // Check if the integer array element exists
+            if (((int *)entry->value)[j]) {
+              printf(BLUE " %d " RESET, ((int *)entry->value)[j]);
             }
           }
         }
-        printf("]\n");
+        printf(GREEN "]\n" RESET);
       } else {
         Result *res = EvalAst(node->print.statments[i], p);
         if (res) {
           if (res->NodeType == NODE_STRING_LITERAL) {
-            printf("%s", trimQuotes((char *)res->result));
+            printf(YELLOW "%s" RESET, trimQuotes((char *)res->result));
           } else {
             printf(BLUE "%lf" RESET, *(double *)res->result);
           }
@@ -549,11 +556,11 @@ Result *EvalAst(AstNode *node, Parser *p) {
       }
 
     } else if (strcmp(node->array.type, "number") == 0) {
-      int values[node->array.arraySize];
+      double values[node->array.arraySize];
       for (int i = 0; i < node->array.arraySize; i++) {
         if (node->array.elements[i]) {
           Result *res = EvalAst(node->array.elements[i], p);
-          values[i] = *(int *)res->result;
+          values[i] = *(double *)res->result;
           freeResult(res);
         }
       }

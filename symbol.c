@@ -265,7 +265,7 @@ void updateSymbolTableValue(SymbolTable *table, char *varName, Result *value,
 }
 
 void insertNumArraySymbol(SymbolTable *table, char *name, char *type, int size,
-                          int *value, int isFixed) {
+                          double *value, int isFixed) {
   {
     // Check if the symbol is already declared in the current scope
     for (int i = table->size - 1; i >= 0; i--) {
@@ -293,7 +293,8 @@ void insertNumArraySymbol(SymbolTable *table, char *name, char *type, int size,
     }
 
     if (size > 0) {
-      table->entries[table->size].value = (int *)malloc(sizeof(int) * size);
+      table->entries[table->size].value =
+          (double *)malloc(sizeof(double) * size);
       for (int i = 0; i < size; i++) {
         if (value[i]) {
           ((int *)table->entries[table->size].value)[i] = value[i];
@@ -305,6 +306,7 @@ void insertNumArraySymbol(SymbolTable *table, char *name, char *type, int size,
     table->entries[table->size].type = strdup(type);
     table->entries[table->size].isArray = 1;
     table->entries[table->size].isFixed = isFixed;
+    table->entries[table->size].arraySize = size;
     table->entries[table->size].scope =
         table->currentScope; // Set the scope of the new symbol
     table->size++;
