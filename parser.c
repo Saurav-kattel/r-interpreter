@@ -222,6 +222,25 @@ AstNode *newArrayNode(char *name, char *type, int isFixed, int size,
   return node;
 }
 
+AstNode *newArrayDeclNode(char *name, char *type, int isFixed, int size,
+                          Loc loc) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+
+  node->loc = loc;
+  node->type = NODE_ARRAY_DECLARATION;
+  node->array.isDeclaration = 1;
+  node->array.isFixed = isFixed;
+  node->array.name = strdup(name);
+  node->array.type = strdup(type);
+  node->array.arraySize = size;
+  node->array.elements = NULL;
+  return node;
+}
+
 AstNode *newWhileNode(AstNode *condition, AstNode *body, Loc loc) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
@@ -1114,6 +1133,7 @@ AstNode *parseArray(Parser *p) {
 
   //:
   consume(TOKEN_COLON, p);
+
   // type of array
   type = p->current;
   if (!checkValidType(type)) {
@@ -1122,6 +1142,10 @@ AstNode *parseArray(Parser *p) {
   }
   consume(TOKEN_IDEN, p);
 
+  if (p->current->type == TOKEN_SEMI_COLON) {
+    return newArrayDeclNode(name->value, type->value, isFixed, arraySize,
+                            *name->loc);
+  }
   // =
   consume(TOKEN_ASSIGN, p);
 

@@ -502,7 +502,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
           if (strcmp(entry->type, "string") == 0) {
             // Check if the string array element exists
-            if (((char **)entry->value)[j]) {
+            if (entry->value && ((char **)entry->value)[j]) {
               printf(YELLOW " %s " RESET, ((char **)entry->value)[j]);
               if (j < entry->arraySize - 1) {
                 printf(MAGENTA "," RESET);
@@ -510,7 +510,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
             }
           } else {
             // Check if the integer array element exists
-            if (((int *)entry->value)[j]) {
+            if (entry->value && ((int *)entry->value)[j]) {
               printf(BLUE " %d " RESET, ((int *)entry->value)[j]);
             }
           }
@@ -535,14 +535,25 @@ Result *EvalAst(AstNode *node, Parser *p) {
   }
 
   case NODE_ARRAY_INIT: {
-    if (strcmp(node->array.type, "string") == 0) {
 
+    SymbolTableEntry *var =
+        lookupSymbol(p->table, node->array.name, node->isParam);
+
+    if (var) {
+      printEvalError(node->loc, "cannot redeclare %s is already decleared\n",
+                     node->identifier.name);
+      exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(node->array.type, "string") == 0) {
       char *values[node->array.arraySize];
       for (int i = 0; i < node->array.arraySize; i++) {
         if (node->array.elements[i]) {
           Result *res = EvalAst(node->array.elements[i], p);
           values[i] = strdup((char *)res->result);
           freeResult(res);
+        } else {
+          values[i] = NULL;
         }
       }
 
@@ -567,6 +578,27 @@ Result *EvalAst(AstNode *node, Parser *p) {
       insertNumArraySymbol(p->table, node->array.name, node->array.type,
                            node->array.arraySize, values, node->array.isFixed);
     }
+    break;
+  }
+
+  case NODE_ARRAY_DECLARATION: {
+    SymbolTableEntry *var =
+        lookupSymbol(p->table, node->array.name, node->isParam);
+
+    if (var) {
+      printEvalError(node->loc, "cannot redeclare  %s is already decleared\n",
+                     node->identifier.name);
+      exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(node->array.type, "string") == 0) {
+      insertStrArraySymbol(p->table, node->array.name, node->array.type,
+                           node->array.arraySize, NULL, node->array.isFixed);
+    } else {
+      insertNumArraySymbol(p->table, node->array.name, node->array.type,
+                           node->array.arraySize, NULL, node->array.isFixed);
+    }
+
     break;
   }
 
@@ -781,7 +813,8 @@ void freeAst(AstNode *node) {
     free(node->block.statements);
     break;
   }
-  case NODE_ARRAY_INIT: {
+  case NODE_ARRAY_INIT:
+  case NODE_ARRAY_DECLARATION: {
     if (node->array.name) {
       free(node->array.name);
     }
@@ -789,10 +822,13 @@ void freeAst(AstNode *node) {
     if (node->array.type) {
       free(node->array.type);
     }
-    for (int i = 0; i < node->array.arraySize; i++) {
-      freeAst(node->array.elements[i]);
+    if (node->array.elements) {
+      for (int i = 0; i < node->array.arraySize; i++) {
+        freeAst(node->array.elements[i]);
+      }
+      free(node->array.elements);
     }
-    free(node->array.elements);
+
     break;
   }
     if (node->block.statements) {

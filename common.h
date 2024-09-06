@@ -99,6 +99,7 @@ struct AstNode {
       char *type;
       int arraySize;
       int isFixed;
+      int isDeclaration;
       AstNode **elements;
     } array;
 

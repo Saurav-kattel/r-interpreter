@@ -34,6 +34,7 @@ static const char *nodeTypeNames[] = {
     "node_contnue",
     "node_while_loop",
     "array_init",
+    "array_declaration",
 
 };
 enum {
@@ -58,6 +59,7 @@ enum {
   NODE_CONTNUE,
   NODE_WHILE_LOOP,
   NODE_ARRAY_INIT,
+  NODE_ARRAY_DECLARATION,
 };
 
 // NECESSARY
@@ -82,7 +84,7 @@ AstNode *parseArray(Parser *p);
 AstNode *parseFunction(Parser *p);
 AstNode *functionCall(Parser *p);
 AstNode *parseReadIn(Parser *p);
-
+AstNode *oarseArrayDecl(Parser *p);
 // utils
 Parser *InitParser(Lexer *, SymbolTable *);
 void freeAst(AstNode *);

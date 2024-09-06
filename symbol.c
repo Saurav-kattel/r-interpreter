@@ -292,7 +292,7 @@ void insertNumArraySymbol(SymbolTable *table, char *name, char *type, int size,
       table->entries = new_entries;
     }
 
-    if (size > 0) {
+    if (size > 0 && value) {
       table->entries[table->size].value =
           (double *)malloc(sizeof(double) * size);
       for (int i = 0; i < size; i++) {
@@ -341,7 +341,7 @@ void insertStrArraySymbol(SymbolTable *table, char *name, char *type, int size,
     table->entries = new_entries;
   }
 
-  if (size > 0) {
+  if (size > 0 && value) {
     table->entries[table->size].value = (char **)malloc(sizeof(char *) * size);
     for (int i = 0; i < size; i++) {
       if (value[i]) {
