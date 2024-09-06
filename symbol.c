@@ -183,7 +183,7 @@ SymbolTableEntry *lookupFnSymbol(SymbolTable *table, char *symbol) {
 }
 
 SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol, int param) {
-  // Check for NULL pointers4
+  // Check for NULL poinnters4
   //
 
   if (table == NULL || symbol == NULL || table->entries == NULL) {
@@ -351,6 +351,7 @@ void insertStrArraySymbol(SymbolTable *table, char *name, char *type, int size,
   table->entries[table->size].symbol = strdup(name);
   table->entries[table->size].type = strdup(type);
   table->entries[table->size].isArray = 1;
+  table->entries[table->size].arraySize = size;
   table->entries[table->size].isFixed = isFixed;
   table->entries[table->size].scope =
       table->currentScope; // Set the scope of the new symbol

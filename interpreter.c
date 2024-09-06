@@ -494,16 +494,33 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
   case NODE_FUNCTION_PRINT: {
     for (int i = 0; i < node->print.statementCount; i++) {
-      Result *res = EvalAst(node->print.statments[i], p);
-      if (res) {
-        if (res->NodeType == NODE_STRING_LITERAL) {
-          printf("%s" RESET, trimQuotes((char *)res->result));
-        } else {
-          printf(BLUE "%lf" BLUE, *(double *)res->result);
+      char *name = node->print.statments[i]->array.name;
+      SymbolTableEntry *entry = lookupSymbol(p->table, name, 0);
+      if (entry) {
+        printf("[");
+        for (int j = 0; j < entry->arraySize; j++) {
+
+          if (((char **)entry->value)[j]) {
+            if (strcmp(entry->type, "string") == 0) {
+              printf(" %s  ", trimQuotes(((char **)entry->value)[j]));
+            } else {
+              printf(BLUE "%d " RESET, ((int *)entry->value)[j]);
+            }
+          }
         }
-        freeResult(res);
+        printf("]\n");
       } else {
-        printf(RED "(NULL) RESET\n");
+        Result *res = EvalAst(node->print.statments[i], p);
+        if (res) {
+          if (res->NodeType == NODE_STRING_LITERAL) {
+            printf("%s", trimQuotes((char *)res->result));
+          } else {
+            printf(BLUE "%lf" RESET, *(double *)res->result);
+          }
+          freeResult(res);
+        } else {
+          printf(RED "(NULL) RESET\n");
+        }
       }
     }
     printf("\n");
