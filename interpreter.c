@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MAX_STRING_LENGTH 255
+
 void printEvalError(Loc loc, const char *s, ...) {
 
   va_list args;
@@ -508,6 +510,34 @@ Result *EvalAst(AstNode *node, Parser *p) {
     break;
   }
 
+  case NODE_ARRAY_INIT: {
+    if (strcmp(node->array.type, "string") == 0) {
+
+      char *values[node->array.arraySize];
+      for (int i = 0; i < node->array.arraySize; i++) {
+        if (node->array.elements[i]) {
+          Result *res = EvalAst(node->array.elements[i], p);
+          values[i] = strdup((char *)res->result);
+          freeResult(res);
+        }
+      }
+      insertStrArraySymbol(p->table, node->array.name, node->array.type,
+                           node->array.arraySize, values, node->array.isFixed);
+    } else if (strcmp(node->array.type, "number") == 0) {
+      int values[node->array.arraySize];
+      for (int i = 0; i < node->array.arraySize; i++) {
+        if (node->array.elements[i]) {
+          Result *res = EvalAst(node->array.elements[i], p);
+          values[i] = *(int *)res->result;
+          freeResult(res);
+        }
+      }
+      insertNumArraySymbol(p->table, node->array.name, node->array.type,
+                           node->array.arraySize, values, node->array.isFixed);
+    }
+    break;
+  }
+
   case NODE_BREAK: {
     Result *res = newResult(NULL, NODE_BREAK, 0);
     res->isBreak = 1;
@@ -532,36 +562,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
                             // by result->result, if applicable
       free(result);         // Free the Result structure itself
     };
-    /*
-        while (condition) {
-          Result *blockRes = EvalAst(node->whileLoop.body, p);
-          if (blockRes && blockRes->isReturn) {
-            return blockRes;
-          }
-
-          // free  the result if result is valid and is not a type of return
-          if (blockRes && blockRes->isContinue) {
-            freeResult(blockRes);
-            freeResult(result);
-            result = EvalAst(node->whileLoop.condition, p);
-            condition = *(double *)result->result;
-            free(result);
-            continue; // Skip the rest of the loop body
-          }
-
-          // Handle break: exit the loop
-          if (blockRes && blockRes->isBreak) {
-            freeResult(blockRes);
-            break; // Exit the loop
-          }
-
-          freeResult(blockRes);
-
-          blockRes = EvalAst(node->whileLoop.condition, p);
-          condition = *(double *)blockRes->result;
-          freeResult(blockRes);
-        }
-          */
 
     while (condition) {
       Result *blockRes = EvalAst(node->whileLoop.body, p);
@@ -746,6 +746,22 @@ void freeAst(AstNode *node) {
         node->block.statements[i] = NULL;
       }
     }
+
+  case NODE_ARRAY_INIT: {
+    if (node->array.name) {
+      free(node->array.name);
+    }
+
+    if (node->array.type) {
+      free(node->array.type);
+    }
+
+    for (int i = 0; i < node->array.arraySize; i++) {
+      freeAst(node->array.elements[i]);
+    }
+    free(node->array.elements);
+    break;
+  }
     if (node->block.statements) {
       free(node->block.statements);
       node->block.statements = NULL;

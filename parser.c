@@ -1088,6 +1088,7 @@ AstNode *parseWhileNode(Parser *p) {
 }
 
 AstNode *parseArray(Parser *p) {
+
   AstNode **elements = NULL;
   Token *name = p->current;
   Token *type = NULL;
@@ -1101,9 +1102,9 @@ AstNode *parseArray(Parser *p) {
 
   // array size
   if (p->current->type == TOKEN_NUMBER) {
-    consume(TOKEN_NUMBER, p);
+    arraySize = atoi(p->current->value);
     isFixed = 1;
-    sscanf(p->current->value, "%d", &arraySize);
+    consume(TOKEN_NUMBER, p);
   } else {
     isFixed = 0;
   }
@@ -1136,7 +1137,9 @@ AstNode *parseArray(Parser *p) {
       exit(EXIT_FAILURE);
     }
 
-    for (int i = 0; i < arraySize; i++) {
+    int i = 0;
+    while (i < arraySize && p->current->type != TOKEN_RCURLY) {
+
       AstNode *ast = logical(p);
       char *astType = getNodeType(ast->type);
 
@@ -1151,6 +1154,7 @@ AstNode *parseArray(Parser *p) {
           p->current->type == TOKEN_COMMA) {
         consume(TOKEN_COMMA, p);
       }
+      i++;
     }
   } else {
 
@@ -1191,7 +1195,7 @@ AstNode *parseArray(Parser *p) {
 
       if (p->current->type == TOKEN_COMMA &&
           parserPeek(p)->type != TOKEN_RCURLY) {
-        consume(TOKEN_RCURLY, p);
+        consume(TOKEN_COMMA, p);
       }
 
       elements[currentSize] = ast;
