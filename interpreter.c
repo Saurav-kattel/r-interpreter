@@ -521,8 +521,16 @@ Result *EvalAst(AstNode *node, Parser *p) {
           freeResult(res);
         }
       }
+
       insertStrArraySymbol(p->table, node->array.name, node->array.type,
                            node->array.arraySize, values, node->array.isFixed);
+
+      for (int i = 0; i < node->array.arraySize; i++) {
+        if (values[i]) {
+          free(values[i]);
+        }
+      }
+
     } else if (strcmp(node->array.type, "number") == 0) {
       int values[node->array.arraySize];
       for (int i = 0; i < node->array.arraySize; i++) {
@@ -739,14 +747,16 @@ void freeAst(AstNode *node) {
       node->stringLiteral.value = NULL;
     }
     break;
-  case NODE_BLOCK:
+  case NODE_BLOCK: {
     for (int i = 0; i < node->block.statementCount; i++) {
       if (node->block.statements[i]) {
         freeAst(node->block.statements[i]);
         node->block.statements[i] = NULL;
       }
     }
-
+    free(node->block.statements);
+    break;
+  }
   case NODE_ARRAY_INIT: {
     if (node->array.name) {
       free(node->array.name);
@@ -755,7 +765,6 @@ void freeAst(AstNode *node) {
     if (node->array.type) {
       free(node->array.type);
     }
-
     for (int i = 0; i < node->array.arraySize; i++) {
       freeAst(node->array.elements[i]);
     }
@@ -943,17 +952,32 @@ AstNode *parseAst(Parser *p) {
 }
 
 void freeSymbolTable(SymbolTable *table) {
-  for (int i = 0; i < table->size; i++) {
-    SymbolTableEntry *entry = &table->entries[i];
-    if (entry->isFn) {
-      if (entry->function.name) {
-        free(entry->function.name);
+  if (table) {
+    for (int i = 0; i < table->size; i++) {
+      SymbolTableEntry *entry = &table->entries[i];
+      if (entry->isArray) {
+        if (entry->value) {
+          if (strcmp(entry->type, "string") == 0) {
+            for (int j = 0; j < entry->arraySize; j++) {
+              if (((char **)entry->value)[j]) {
+                free(((char **)entry->value)[j]);
+              }
+            }
+            free((char **)entry->value);
+          } else {
+            free((int *)entry->value);
+          }
+        }
       }
-      if (entry->function.returnType) {
-        free(entry->function.returnType);
+      // Free function related memory
+      if (entry->isFn) {
+        if (entry->function.name) {
+          free(entry->function.name);
+        }
+        if (entry->function.returnType) {
+          free(entry->function.returnType);
+        }
       }
-      // Handle function parameters and body if necessary
-    } else {
       if (entry->type) {
         free(entry->type);
       }
@@ -961,7 +985,7 @@ void freeSymbolTable(SymbolTable *table) {
         free(entry->symbol);
       }
     }
+    free(table->entries);
+    free(table);
   }
-  free(table->entries);
-  free(table);
 }

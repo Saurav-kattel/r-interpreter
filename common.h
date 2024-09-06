@@ -13,24 +13,6 @@ typedef struct SymbolTable {
 
 } SymbolTable;
 
-typedef struct Result {
-  int NodeType;
-  void *result;
-  int isBreak;
-  int isContinue;
-  int isReturn;
-} Result;
-
-typedef struct {
-  Token *current;
-  Lexer *lex;
-  Token **tokens;
-  int idx;
-  int size;
-
-  SymbolTable *table;
-} Parser;
-
 typedef struct SymbolTableEntry {
 
   char *symbol;  // name of the symbol
@@ -56,6 +38,23 @@ typedef struct SymbolTableEntry {
   } function;
 } SymbolTableEntry;
 
+typedef struct Result {
+  int NodeType;
+  void *result;
+  int isBreak;
+  int isContinue;
+  int isReturn;
+} Result;
+
+typedef struct {
+  Token *current;
+  Lexer *lex;
+  Token **tokens;
+  int idx;
+  int size;
+
+  SymbolTable *table;
+} Parser;
 struct AstNode {
   int type;
   Loc loc;
