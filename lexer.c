@@ -266,6 +266,27 @@ Token *GetNextToken(Lexer *l) {
     printf("should not happen\n");
   }
 
+  if (c == '[') {
+    if (!isAtEnd(l)) {
+      return NewToken(l, TOKEN_LSQUARE, "[");
+    }
+    printf("should not happen\n");
+  }
+
+  if (c == ']') {
+    if (!isAtEnd(l)) {
+      return NewToken(l, TOKEN_RSQUARE, "]");
+    }
+    printf("should not happen\n");
+  }
+
+  if (c == '}') {
+    if (!isAtEnd(l)) {
+      return NewToken(l, TOKEN_RCURLY, "}");
+    }
+    printf("should not happen\n");
+  }
+
   if (c == ';') {
     return NewToken(l, TOKEN_SEMI_COLON, ";");
   }

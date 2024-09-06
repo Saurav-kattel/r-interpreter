@@ -32,11 +32,17 @@ typedef struct {
 } Parser;
 
 typedef struct SymbolTableEntry {
-  char *symbol;
-  char *type;  // Type field for each symbol table entry
-  void *value; // Use a void pointer to store values of different types
-  int isFn;
-  int isParam;
+
+  char *symbol;  // name of the symbol
+  char *type;    // Type field for each symbol table entry
+  void *value;   // Use a void pointer to store values of different types
+  int isFn;      // determines the the symbol entry is function or just variable
+  int isArray;   // determines the the symbol entry is array or just variable
+  int isFixed;   // determies if the array is dynamic or fixed size array
+  int arraySize; // keeps the recored of the size of array;
+  int isParam; // determines the the symbol entry is function parameter or just
+               // variable
+
   int scope; // Scope field for each symbol table entry
 
   struct {
@@ -88,6 +94,14 @@ struct AstNode {
       struct AstNode *value;
       int isDeceleration;
     } identifier;
+
+    struct {
+      char *name;
+      char *type;
+      int arraySize;
+      int isFixed;
+      AstNode **elements;
+    } array;
 
     struct {
       struct AstNode **statements;

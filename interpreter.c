@@ -847,8 +847,24 @@ AstNode *parseAst(Parser *p) {
     consume(TOKEN_SEMI_COLON, p);
     return ast;
   }
+
   case TOKEN_IDEN: {
-    // Handle variable declaration or assignment
+    Token *nextToken = p->tokens[p->idx + 1];
+
+    switch (nextToken->type) {
+    case TOKEN_LPAREN: {
+      AstNode *ast = functionCall(p);
+      consume(TOKEN_SEMI_COLON, p);
+      return ast;
+    }
+    case TOKEN_LSQUARE: {
+      AstNode *ast = parseArray(p);
+      consume(TOKEN_SEMI_COLON, p);
+      return ast;
+    }
+    default:
+      break;
+    }
     AstNode *ast = varDecleration(p);
     consume(TOKEN_SEMI_COLON, p);
     return ast;

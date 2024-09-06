@@ -33,6 +33,7 @@ static const char *nodeTypeNames[] = {
     "node_break",
     "node_contnue",
     "node_while_loop",
+    "array_init",
 
 };
 enum {
@@ -56,6 +57,7 @@ enum {
   NODE_BREAK,
   NODE_CONTNUE,
   NODE_WHILE_LOOP,
+  NODE_ARRAY_INIT,
 };
 
 // NECESSARY
@@ -76,6 +78,10 @@ AstNode *parseForLoop(Parser *p);
 AstNode *parseBreakNode(Parser *p);
 AstNode *parseContinueNode(Parser *p);
 AstNode *parseWhileNode(Parser *p);
+AstNode *parseArray(Parser *p);
+AstNode *parseFunction(Parser *p);
+AstNode *functionCall(Parser *p);
+AstNode *parseReadIn(Parser *p);
 
 // utils
 Parser *InitParser(Lexer *, SymbolTable *);
@@ -86,9 +92,6 @@ void printContext(Token *);
 int checkValidType(Token *);
 int parserIsAtEnd(Parser *p);
 // MIGHT BE NEEDED
-AstNode *parseProgram(Parser *p, SymbolTable *table);
-AstNode *parseFunction(Parser *p);
-AstNode *functionCall(Parser *p);
-AstNode *parseReadIn(Parser *p);
+
 int isKeyword(char *);
 #endif // PRASER_H

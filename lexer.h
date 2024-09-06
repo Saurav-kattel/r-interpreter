@@ -20,6 +20,8 @@ enum {
   TOKEN_ERR,
   TOKEN_COMMA,
   TOKEN_DOT,
+  TOKEN_LSQUARE,
+  TOKEN_RSQUARE,
 
   // arthemetic
   TOKEN_PLUS,
@@ -72,6 +74,8 @@ static const char *tokenNames[] = {
     "ERR",
     ",",
     ".",
+    "[",
+    "]",
 
     // arthemetic
     "+",

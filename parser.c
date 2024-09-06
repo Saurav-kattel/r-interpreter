@@ -11,6 +11,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+char *getNodeType(int nodeType) {
+  switch (nodeType) {
+  case NODE_STRING_LITERAL: {
+    return "string";
+  }
+  case NODE_NUMBER: {
+    return "number";
+  }
+  default: {
+    return "nan";
+  }
+  }
+}
+
 void populateTokens(Parser *p, Lexer *lex, int initialCapacity, int *size) {
   // Allocate initial memory for tokens
   //
@@ -189,6 +203,24 @@ int checkValidType(Token *typeToken) {
 }
 
 // -------------------------for parsing ast -----------------------
+
+AstNode *newArrayNode(char *name, char *type, int isFixed, int size,
+                      AstNode **elements, Loc loc) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+
+  node->loc = loc;
+  node->type = NODE_ARRAY_INIT;
+  node->array.isFixed = isFixed;
+  node->array.name = strdup(name);
+  node->array.type = strdup(type);
+  node->array.arraySize = size;
+  node->array.elements = elements;
+  return node;
+}
 
 AstNode *newWhileNode(AstNode *condition, AstNode *body, Loc loc) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
@@ -475,6 +507,11 @@ AstNode *factor(Parser *p) {
     if (parserPeek(p)->type == TOKEN_LPAREN) {
       return functionCall(p);
     }
+
+    if (parserPeek(p)->type == TOKEN_LSQUARE) {
+      return parseArray(p);
+    }
+
     // to parse the variable that was assigned as a value
     AstNode *node = newIdentifierNode("", tkn->value, NULL, p,
                                       NODE_IDENTIFIER_VALUE, 0, *tkn->loc);
@@ -580,9 +617,6 @@ AstNode *handleIdenIdentifiers(Parser *p, Token *typeToken, char *varName,
 
 AstNode *varDecleration(Parser *p) {
   Token *tkn = p->current;
-  if (p->current->type == TOKEN_IDEN && parserPeek(p)->type == TOKEN_LPAREN) {
-    return functionCall(p);
-  }
 
   char *varName = strdup(tkn->value);
   if (!varName) {
@@ -1051,4 +1085,123 @@ AstNode *parseWhileNode(Parser *p) {
   consume(TOKEN_RPAREN, p);
   AstNode *body = parseBlockStmt(p);
   return newWhileNode(condition, body, loc);
+}
+
+AstNode *parseArray(Parser *p) {
+  AstNode **elements = NULL;
+  Token *name = p->current;
+  Token *type = NULL;
+  int arraySize = 0;
+  int isFixed = 0;
+
+  // array name
+  consume(TOKEN_IDEN, p);
+  //[
+  consume(TOKEN_LSQUARE, p);
+
+  // array size
+  if (p->current->type == TOKEN_NUMBER) {
+    consume(TOKEN_NUMBER, p);
+    isFixed = 1;
+    sscanf(p->current->value, "%d", &arraySize);
+  } else {
+    isFixed = 0;
+  }
+
+  //]
+  consume(TOKEN_RSQUARE, p);
+
+  //:
+  consume(TOKEN_COLON, p);
+  // type of array
+  type = p->current;
+  if (!checkValidType(type)) {
+    printError(type, "unknown type param %s\n", type->value);
+    exit(EXIT_FAILURE);
+  }
+  consume(TOKEN_IDEN, p);
+
+  // =
+  consume(TOKEN_ASSIGN, p);
+
+  //{
+  consume(TOKEN_LCURLY, p);
+
+  if (isFixed) {
+
+    elements = (AstNode **)malloc(sizeof(AstNode *) * arraySize);
+    if (elements == NULL) {
+      printf("cannot allocated enough memory for array elements of size %d",
+             arraySize);
+      exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < arraySize; i++) {
+      AstNode *ast = logical(p);
+      char *astType = getNodeType(ast->type);
+
+      if (strcmp(astType, type->value) != 0) {
+        printError(type, "cannot insert type of %s in array of type %s",
+                   astType, type->value);
+        exit(EXIT_FAILURE);
+      }
+
+      elements[i] = ast;
+      if (parserPeek(p)->type != TOKEN_RCURLY &&
+          p->current->type == TOKEN_COMMA) {
+        consume(TOKEN_COMMA, p);
+      }
+    }
+  } else {
+
+    int currentSize = 0;
+    int capacity = 10;
+
+    elements = (AstNode **)malloc(sizeof(AstNode *) * capacity);
+    if (elements == NULL) {
+      printf("cannot allocated enough memory for array elements of size %d",
+             arraySize);
+      exit(EXIT_FAILURE);
+    }
+
+    while (p->current->type != TOKEN_RCURLY) {
+
+      // reallocating the new mem size if the array is full
+
+      if (currentSize >= capacity) {
+        capacity *= 2;
+        elements = (AstNode **)realloc(elements, sizeof(AstNode *) * capacity);
+        if (elements == NULL) {
+          printf("cannot allocated enough memory for array elements of size %d",
+                 arraySize);
+          exit(EXIT_FAILURE);
+        }
+      }
+
+      // consume the comma if the current token is comma but it is not in  the
+      // end
+
+      AstNode *ast = logical(p);
+      char *astType = getNodeType(ast->type);
+      if (strcmp(astType, type->value) != 0) {
+        printError(type, "cannot insert type of %s in array of type %s",
+                   astType, type->value);
+        exit(EXIT_FAILURE);
+      }
+
+      if (p->current->type == TOKEN_COMMA &&
+          parserPeek(p)->type != TOKEN_RCURLY) {
+        consume(TOKEN_RCURLY, p);
+      }
+
+      elements[currentSize] = ast;
+      currentSize++;
+    }
+    arraySize = currentSize;
+  }
+
+  consume(TOKEN_RCURLY, p);
+
+  return newArrayNode(name->value, type->value, isFixed, arraySize, elements,
+                      *name->loc);
 }
