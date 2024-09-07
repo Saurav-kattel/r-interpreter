@@ -5,6 +5,7 @@
 
 // Forward declare AstNode for use in SymbolTableEntry
 typedef struct AstNode AstNode;
+
 typedef struct SymbolTable {
   struct SymbolTableEntry *entries;
   int size;

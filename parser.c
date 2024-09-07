@@ -223,6 +223,19 @@ AstNode *newArrayNode(char *name, char *type, int isFixed, int actualSize,
   return node;
 }
 
+AstNode *newArrayElmAccessNode(AstNode *index, char *name, Loc loc) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+  node->loc = loc;
+  node->type = NODE_ARRAY_ELEMENT_ACCESS;
+  node->arrayElm.name = strdup(name);
+  node->arrayElm.index = index;
+  return node;
+};
+
 AstNode *newArrayElmAssignNode(char *name, AstNode *index, AstNode *value,
                                Loc loc) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
@@ -1243,6 +1256,10 @@ AstNode *parseArray(Parser *p) {
     AstNode *value = logical(p);
     char *nodeType = getNodeType(value->type);
     return newArrayElmAssignNode(name->value, arraySize, value, *name->loc);
+  } else if (p->current->type == TOKEN_SEMI_COLON) {
+    AstNode *node =
+        newArrayElmAccessNode(arraySize, name->value, *p->current->loc);
+    return node;
   }
 
   //:

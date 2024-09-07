@@ -35,8 +35,8 @@ static const char *nodeTypeNames[] = {
     "node_while_loop",
     "array_init",
     "array_declaration",
-    "array_element_assign"
-
+    "array_element_assign",
+    "node_array_element_access",
 };
 enum {
   NODE_BINARY_OP,
@@ -62,6 +62,7 @@ enum {
   NODE_ARRAY_INIT,
   NODE_ARRAY_DECLARATION,
   NODE_ARRAY_ELEMENT_ASSIGN,
+  NODE_ARRAY_ELEMENT_ACCESS,
 };
 
 // NECESSARY

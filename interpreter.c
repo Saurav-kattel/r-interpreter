@@ -37,6 +37,7 @@ void printEvalError(Loc loc, const char *s, ...) {
 
   va_end(args);
 
+  printf("\n");
   // Print the context based on the token's location
   // printContext(tkn);
 }
@@ -243,8 +244,10 @@ Result *EvalAst(AstNode *node, Parser *p) {
   }
 
   case NODE_FUNCTION_PARAM: {
+    enterScope(p->table);
     insertSymbol(p->table, node->identifier.name, node->identifier.type, NULL,
                  node->isParam);
+    exitScope(p->table);
     break;
   }
 
@@ -267,6 +270,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
         free(res);
       }
     }
+
     break;
   }
   case NODE_FUNCTION_CALL: {
@@ -280,7 +284,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
     for (int i = 0; i < node->function.call.argsCount; i++) {
       Result *res = EvalAst(node->function.call.args[i], p);
       char *paramType = sym->function.parameters[i]->identifier.type;
-
       if (strcmp(paramType, getDataType(res)) != 0) {
         printEvalError(node->loc, "expected argument of type %s but got %s",
                        paramType, getDataType(res));
@@ -293,6 +296,12 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
 
     Result *value = EvalAst(sym->function.functionBody, p);
+
+    if (sym->function.returnType && (value == NULL)) {
+      printEvalError(node->loc, "expected return type to be %s but got void\n",
+                     sym->function.returnType);
+      exit(EXIT_FAILURE);
+    }
 
     if (strcmp(sym->function.returnType, getDataType(value)) != 0) {
       printEvalError(node->loc,
@@ -628,9 +637,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
       char *name = node->print.statments[i]->array.name;
       SymbolTableEntry *entry = lookupSymbol(p->table, name, 0);
-
       if (entry && entry->isArray) {
-
         printf(GREEN "[" RESET);
         for (int j = 0; j < entry->arraySize; j++) {
           if (strcmp(entry->type, "string") == 0) {
@@ -649,6 +656,9 @@ Result *EvalAst(AstNode *node, Parser *p) {
           }
         }
         printf(GREEN "]\n" RESET);
+      } else if (entry->isFn) {
+        printEvalError(node->loc, "cannot call function directly from println");
+        exit(EXIT_FAILURE);
       } else {
         Result *res = EvalAst(node->print.statments[i], p);
         if (res) {
@@ -667,6 +677,36 @@ Result *EvalAst(AstNode *node, Parser *p) {
     break;
   }
 
+  case NODE_ARRAY_ELEMENT_ACCESS: {
+    SymbolTableEntry *var =
+        lookupSymbol(p->table, node->arrayElm.name, node->isParam);
+
+    if (!var || !var->isArray) {
+      printEvalError(node->loc, " %s is not decleared\n", node->arrayElm.name);
+      exit(EXIT_FAILURE);
+    }
+    Result *res = EvalAst(node->arrayElm.index, p);
+    if (!res) {
+      printEvalError(node->loc, "invalid index");
+      exit(EXIT_FAILURE);
+    }
+    double idx = *(double *)res->result;
+    int index = (int)idx;
+    free(res);
+    if (index >= var->arraySize) {
+      printEvalError(node->loc, "index out of bound");
+      exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(var->type, "string") == 0) {
+      char *value = ((char **)var->value)[index];
+      return newResult(value, NODE_STRING_LITERAL, 0);
+    } else {
+      double value = ((double *)var->value)[index];
+      return newResult(&value, NODE_NUMBER, 0);
+    }
+  }
+
     // needs refactoring
   case NODE_ARRAY_INIT: {
     SymbolTableEntry *var =
@@ -674,7 +714,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
     if (var) {
       printEvalError(node->loc, "cannot redeclare %s is already decleared\n",
-                     node->identifier.name);
+                     node->array.name);
       exit(EXIT_FAILURE);
     }
 
@@ -696,8 +736,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
 
-    Result *result = EvalAst(node->array.arraySize, p);
-    if (result->result) {
+    if (node->array.arraySize) {
+      Result *result = EvalAst(node->array.arraySize, p);
       double size = *(double *)result->result;
       if (strcmp(node->array.type, "string") == 0) {
         insertStrArraySymbol(p->table, node->array.name, node->array.type, size,
@@ -777,6 +817,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
       }
       ((char **)var->value)[index] = strdup((char *)res->result);
       var->arraySize++;
+      free(res->result);
+      free(res);
       break;
     }
 
@@ -785,7 +827,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
 
     ((double *)var->value)[index] = *(double *)res->result;
-
+    free(res);
     var->arraySize++;
     break;
   }
@@ -804,6 +846,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
   case NODE_WHILE_LOOP: {
 
+    // TODO: still some errors mainly continue one;
+    enterScope(p->table);
     Result *result = EvalAst(node->whileLoop.condition, p);
     double condition = 0;
     if (result) { // Check if result is non-null
@@ -840,10 +884,12 @@ Result *EvalAst(AstNode *node, Parser *p) {
       condition = *(double *)blockRes->result;
       freeResult(blockRes);
     }
+    exitScope(p->table);
     break;
   }
 
   case NODE_FOR_LOOP: {
+    enterScope(p->table);
     // initialize the variable at first
     EvalAst(node->loopFor.initializer, p);
     Result *result = EvalAst(node->loopFor.condition, p);
@@ -870,6 +916,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
       if (blockRes && blockRes->isBreak) {
         free(blockRes->result);
         free(blockRes);
+        enterScope(p->table);
         break; // Exit the loop
       }
 
@@ -880,13 +927,10 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
       // handle the icrDcr statement
       EvalAst(node->loopFor.icrDcr, p);
-      // free the previous resul
-      //    freeResult(result);
-      // // check the conditon with new value
       result = EvalAst(node->loopFor.condition, p);
       condition = *(double *)result->result;
     }
-
+    exitScope(p->table);
     break;
   }
 
@@ -1029,6 +1073,21 @@ void freeAst(AstNode *node) {
 
     if (node->arrayElm.value) {
       freeAst(node->arrayElm.value);
+    }
+    if (node->arrayElm.index) {
+      freeAst(node->arrayElm.index);
+    }
+    break;
+  }
+  case NODE_ARRAY_ELEMENT_ACCESS: {
+    if (node->arrayElm.index) {
+      freeAst(node->arrayElm.index);
+    }
+    if (node->arrayElm.value) {
+      free(node->arrayElm.value);
+    }
+    if (node->arrayElm.name) {
+      free(node->arrayElm.name);
     }
     break;
   }
@@ -1202,28 +1261,28 @@ AstNode *parseAst(Parser *p) {
     return NULL;
 
   default:
-    printf("Unexpected token %s falling through the condition\n",
-           tokenNames[tkn->type]);
+    printEvalError(*p->current->loc, "Unexpected token ' %s ' \n",
+                   tokenNames[tkn->type]);
     exit(EXIT_FAILURE);
   }
+  return NULL;
 }
 
 void freeSymbolTable(SymbolTable *table) {
   if (table) {
     for (int i = 0; i < table->size; i++) {
       SymbolTableEntry *entry = &table->entries[i];
-      if (entry->isArray) {
-        if (entry->value) {
-          if (strcmp(entry->type, "string") == 0) {
-            for (int j = 0; j < entry->arraySize; j++) {
-              if (((char **)entry->value)[j]) {
-                free(((char **)entry->value)[j]);
-              }
+
+      if (entry->isArray && entry->value) {
+        if (strcmp(entry->type, "string") == 0) {
+          for (int j = 0; j < entry->arraySize; j++) {
+            if (((char **)entry->value)[j]) {
+              free(((char **)entry->value)[j]);
             }
-            free((char **)entry->value);
-          } else {
-            free((int *)entry->value);
           }
+          freeAst(entry->value);
+        } else {
+          freeAst(entry->value);
         }
       }
       // Free function related memory

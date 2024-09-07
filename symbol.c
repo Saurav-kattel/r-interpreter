@@ -54,6 +54,8 @@ SymbolTable *createSymbolTable(int initialCapacity) {
   // Explicitly initialize each entry in the table
   for (int i = 0; i < initialCapacity; i++) {
     table->entries[i].symbol = NULL;
+    table->entries[i].arraySize = 0;
+    table->entries[i].isArray = 0;
     table->entries[i].type = NULL;
     table->entries[i].value = NULL;
     table->entries[i].isFn = 0;
@@ -202,6 +204,7 @@ SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol, int param) {
     }
 
     int symbolMatches = strcmp(table->entries[i].symbol, symbol) == 0;
+
     int inScope = table->entries[i].scope <= table->currentScope;
     int isParam = table->entries[i].isParam;
 
@@ -223,19 +226,44 @@ SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol, int param) {
 void enterScope(SymbolTable *table) { table->currentScope++; }
 
 void exitScope(SymbolTable *table) {
-  int i = table->size - 1;
-  while (i >= 0) {
-    if (table->entries[i].scope == table->currentScope) {
+  int i = 0;
+  while (i < table->size) {
+    if (table->entries[i].scope >= table->currentScope) {
+      // Free dynamically allocated memory
+      free(table->entries[i].symbol);
+      free(table->entries[i].type);
+      free(table->entries[i]
+               .value); // Assuming the value is dynamically allocated
+
+      if (table->entries[i].isFn) {
+        // Free function-related fields
+        free(table->entries[i].function.name);
+        free(table->entries[i].function.returnType);
+
+        // Free parameters if they exist
+        for (int j = 0; j < table->entries[i].function.parameterCount; j++) {
+          freeAst(table->entries[i]
+                      .function.parameters[j]); // Assuming freeAst is the
+                                                // function to free AST nodes
+        }
+        free(table->entries[i].function.parameters);
+        freeAst(
+            table->entries[i].function.functionBody); // Free the function body
+      }
+
+      // Shift the remaining entries
       for (int j = i; j < table->size - 1; j++) {
         table->entries[j] = table->entries[j + 1];
       }
-      table->size--;
-    }
-    i--;
-  }
-  table->currentScope--;
-}
+      table->size--; // Reduce the table size after removing the entry
 
+    } else {
+      i++; // Move to the next entry only if no deletion happened
+    }
+  }
+
+  table->currentScope--; // Exit the scope by decrementing the scope level
+}
 void updateSymbolTableValue(SymbolTable *table, char *varName, Result *value,
                             char *type) {
 
