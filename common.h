@@ -97,10 +97,11 @@ struct AstNode {
     struct {
       char *name;
       char *type;
-      int arraySize;
+      AstNode *arraySize;
       int isFixed;
       int isDeclaration;
       AstNode **elements;
+      int actualSize;
     } array;
 
     struct {
@@ -124,6 +125,13 @@ struct AstNode {
     struct {
       char *value;
     } stringLiteral;
+
+    struct {
+      char *name;
+      AstNode *index;
+      AstNode *value;
+
+    } arrayElm;
 
     struct {
       int isCall;

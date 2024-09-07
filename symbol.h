@@ -28,6 +28,6 @@ void printFnSymbolTable(SymbolTable *);
 void insertNumArraySymbol(SymbolTable *table, char *name, char *type, int size,
                           double *value, int isFixed);
 void insertStrArraySymbol(SymbolTable *table, char *name, char *type, int size,
-                          char **value, int isFixed);
+                          char **value, int isFixed, int actualSize);
 
 #endif // SYMBOL_H_

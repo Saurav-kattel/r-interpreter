@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define MAX_STRING_LENGTH 255
 
@@ -64,6 +65,135 @@ void freeResult(Result *res) {
       free(res->result);
     }
     free(res);
+  }
+}
+
+void insertFixedStringArray(AstNode *node, Parser *p, int *size) {
+
+  char *values[node->array.actualSize];
+
+  for (int i = 0; i < node->array.actualSize; i++) {
+    if (node->array.elements[i]) {
+      Result *res = EvalAst(node->array.elements[i], p);
+      values[i] = strdup((char *)res->result);
+      freeResult(res);
+    }
+  }
+
+  int loopSize = (*size);
+
+  if (node->array.actualSize < loopSize) {
+    int actSize = node->array.actualSize;
+  }
+
+  insertStrArraySymbol(p->table, node->array.name, node->array.type, *size,
+                       values, node->array.isFixed, node->array.actualSize);
+
+  for (int i = 0; i < node->array.actualSize; i++) {
+    if (values[i]) {
+      free(values[i]);
+    }
+  }
+}
+
+void insertFixedNumberArray(AstNode *node, Parser *p, int *size) {
+  double values[node->array.actualSize];
+  for (int i = 0; i < node->array.actualSize; i++) {
+    if (node->array.elements[i]) {
+      Result *res = EvalAst(node->array.elements[i], p);
+
+      values[i] = *(double *)res->result;
+      free(res);
+    }
+  }
+
+  insertNumArraySymbol(p->table, node->array.name, node->array.type, *size,
+                       values, node->array.isFixed);
+}
+
+void handleFixedArrayInsert(AstNode *node, Parser *p) {
+
+  Result *res = EvalAst(node->array.arraySize, p);
+  double arraySize = *(double *)res->result;
+  int size = (int)arraySize;
+
+  if (strcmp(node->array.type, "string") == 0) {
+    insertFixedStringArray(node, p, &size);
+  } else if (strcmp(node->array.type, "number") == 0) {
+    insertFixedNumberArray(node, p, &size);
+  }
+}
+
+void insertDynamicStringArray(AstNode *node, Parser *p) {
+  int size = 0;
+  int capacity = 10;
+  char **values = (char **)malloc(sizeof(char *) * capacity);
+
+  while (1) {
+    if (node->array.elements[size]) {
+      Result *res = EvalAst(node->array.elements[size], p);
+      if (!res) {
+        break;
+      }
+
+      if (size >= capacity) {
+        values = (char **)realloc(values, (sizeof(char *) * (capacity *= 2)));
+      }
+
+      values[size] = strdup((char *)res->result);
+      freeResult(res);
+      (size)++;
+    } else {
+      break;
+    }
+  }
+
+  insertStrArraySymbol(p->table, node->array.name, node->array.type, size,
+                       values, node->array.isFixed, node->array.actualSize);
+
+  for (int i = 0; i < size; i++) {
+    if (values[i]) {
+      free(values[i]);
+    }
+  }
+  free(values);
+}
+
+void insertDynamicNumberArray(AstNode *node, Parser *p) {
+
+  int size = 0;
+  int capacity = 10;
+
+  double *values = (double *)malloc(sizeof(double) * capacity);
+
+  while (1) {
+    if (node->array.elements[size]) {
+      Result *res = EvalAst(node->array.elements[size], p);
+      if (!res) {
+        break;
+      }
+
+      if (size >= capacity) {
+        values = (double *)realloc(values, (sizeof(double) * (capacity *= 2)));
+      }
+      values[size] = *(double *)res->result;
+      freeResult(res);
+      size++;
+    } else {
+      break;
+    }
+  }
+  insertNumArraySymbol(p->table, node->array.name, node->array.type, size,
+                       values, node->array.isFixed);
+  free(values);
+}
+
+void handleDynamicArrayInsert(AstNode *node, Parser *p) {
+
+  if (strcmp(node->array.type, "string") == 0) {
+    insertDynamicStringArray(node, p);
+  } else {
+    insertDynamicNumberArray(node, p);
   }
 }
 
@@ -493,26 +623,29 @@ Result *EvalAst(AstNode *node, Parser *p) {
   }
 
   case NODE_FUNCTION_PRINT: {
+
     for (int i = 0; i < node->print.statementCount; i++) {
+
       char *name = node->print.statments[i]->array.name;
       SymbolTableEntry *entry = lookupSymbol(p->table, name, 0);
-      if (entry) {
+
+      if (entry && entry->isArray) {
+
         printf(GREEN "[" RESET);
         for (int j = 0; j < entry->arraySize; j++) {
-
           if (strcmp(entry->type, "string") == 0) {
             // Check if the string array element exists
             if (entry->value && ((char **)entry->value)[j]) {
               printf(YELLOW " %s " RESET, ((char **)entry->value)[j]);
-              if (j < entry->arraySize - 1) {
-                printf(MAGENTA "," RESET);
-              }
             }
           } else {
             // Check if the integer array element exists
-            if (entry->value && ((int *)entry->value)[j]) {
-              printf(BLUE " %d " RESET, ((int *)entry->value)[j]);
+            if (entry->value && ((double *)entry->value)[j]) {
+              printf(BLUE " %.0lf " RESET, ((double *)entry->value)[j]);
             }
+          }
+          if (j < entry->arraySize - 1) {
+            printf(MAGENTA "," RESET);
           }
         }
         printf(GREEN "]\n" RESET);
@@ -534,8 +667,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
     break;
   }
 
+    // needs refactoring
   case NODE_ARRAY_INIT: {
-
     SymbolTableEntry *var =
         lookupSymbol(p->table, node->array.name, node->isParam);
 
@@ -545,38 +678,10 @@ Result *EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
 
-    if (strcmp(node->array.type, "string") == 0) {
-      char *values[node->array.arraySize];
-      for (int i = 0; i < node->array.arraySize; i++) {
-        if (node->array.elements[i]) {
-          Result *res = EvalAst(node->array.elements[i], p);
-          values[i] = strdup((char *)res->result);
-          freeResult(res);
-        } else {
-          values[i] = NULL;
-        }
-      }
-
-      insertStrArraySymbol(p->table, node->array.name, node->array.type,
-                           node->array.arraySize, values, node->array.isFixed);
-
-      for (int i = 0; i < node->array.arraySize; i++) {
-        if (values[i]) {
-          free(values[i]);
-        }
-      }
-
-    } else if (strcmp(node->array.type, "number") == 0) {
-      double values[node->array.arraySize];
-      for (int i = 0; i < node->array.arraySize; i++) {
-        if (node->array.elements[i]) {
-          Result *res = EvalAst(node->array.elements[i], p);
-          values[i] = *(double *)res->result;
-          freeResult(res);
-        }
-      }
-      insertNumArraySymbol(p->table, node->array.name, node->array.type,
-                           node->array.arraySize, values, node->array.isFixed);
+    if (node->array.isFixed) {
+      handleFixedArrayInsert(node, p);
+    } else {
+      handleDynamicArrayInsert(node, p);
     }
     break;
   }
@@ -591,14 +696,97 @@ Result *EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
 
-    if (strcmp(node->array.type, "string") == 0) {
-      insertStrArraySymbol(p->table, node->array.name, node->array.type,
-                           node->array.arraySize, NULL, node->array.isFixed);
+    Result *result = EvalAst(node->array.arraySize, p);
+    if (result->result) {
+      double size = *(double *)result->result;
+      if (strcmp(node->array.type, "string") == 0) {
+        insertStrArraySymbol(p->table, node->array.name, node->array.type, size,
+                             NULL, node->array.isFixed, node->array.actualSize);
+      } else {
+        insertNumArraySymbol(p->table, node->array.name, node->array.type, size,
+                             NULL, node->array.isFixed);
+      }
     } else {
-      insertNumArraySymbol(p->table, node->array.name, node->array.type,
-                           node->array.arraySize, NULL, node->array.isFixed);
+      if (strcmp(node->array.type, "string") == 0) {
+        insertStrArraySymbol(p->table, node->array.name, node->array.type, 0,
+                             NULL, node->array.isFixed, node->array.actualSize);
+      } else {
+        insertNumArraySymbol(p->table, node->array.name, node->array.type, 0,
+                             NULL, node->array.isFixed);
+      }
+    }
+    break;
+  }
+  case NODE_ARRAY_ELEMENT_ASSIGN: {
+
+    SymbolTableEntry *var =
+        lookupSymbol(p->table, node->arrayElm.name, node->isParam);
+
+    if (!var) {
+      printEvalError(node->loc, "array %s is not decleared\n",
+                     node->arrayElm.name);
+      exit(EXIT_FAILURE);
+    }
+    if (!var->isArray) {
+      printEvalError(node->loc, " %s is not an array \n", node->arrayElm.name);
+      exit(EXIT_FAILURE);
     }
 
+    Result *res = EvalAst(node->arrayElm.index, p);
+    double resIndex = *(double *)res->result;
+    int index = (int)resIndex;
+
+    if (var->isFixed) {
+      if (var->arraySize <= index) {
+        printEvalError(node->loc, "index out of bound canot access %d index\n",
+                       node->array.arraySize);
+        exit(EXIT_FAILURE);
+      }
+    } else {
+      if (var->arraySize <= index) {
+        if (!(index <= var->arraySize)) {
+          printEvalError(node->loc, "cannot access  index %dcn ", index);
+          exit(EXIT_FAILURE);
+        }
+        if (strcmp(var->type, "string") == 0) {
+
+          var->value = (char **)realloc(var->value,
+                                        sizeof(char *) * (var->arraySize + 1));
+
+        } else {
+          var->value = (double *)realloc(var->value,
+                                         sizeof(double) * (var->arraySize + 1));
+        }
+      }
+    }
+
+    free(res); // freeing the previous result of index
+
+    res = EvalAst(node->arrayElm.value, p);
+    char *type = getDataType(res);
+
+    if (strcmp(type, var->type) != 0) {
+      printEvalError(node->loc, "cannot assign type of %s to %s", type,
+                     var->type);
+      exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(var->type, "string") == 0) {
+      if (!var->value) {
+        var->value = (char **)malloc(sizeof(char *) * var->arraySize);
+      }
+      ((char **)var->value)[index] = strdup((char *)res->result);
+      var->arraySize++;
+      break;
+    }
+
+    if (!var->value) {
+      var->value = (double *)malloc(sizeof(double) * var->arraySize);
+    }
+
+    ((double *)var->value)[index] = *(double *)res->result;
+
+    var->arraySize++;
     break;
   }
 
@@ -698,6 +886,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
       result = EvalAst(node->loopFor.condition, p);
       condition = *(double *)result->result;
     }
+
     break;
   }
 
@@ -823,19 +1012,27 @@ void freeAst(AstNode *node) {
       free(node->array.type);
     }
     if (node->array.elements) {
-      for (int i = 0; i < node->array.arraySize; i++) {
+      int i = 0;
+      while (node->array.elements[i]) {
         freeAst(node->array.elements[i]);
+        i++;
       }
       free(node->array.elements);
     }
 
     break;
   }
-    if (node->block.statements) {
-      free(node->block.statements);
-      node->block.statements = NULL;
+  case NODE_ARRAY_ELEMENT_ASSIGN: {
+    if (node->arrayElm.name) {
+      free(node->arrayElm.name);
+    }
+
+    if (node->arrayElm.value) {
+      freeAst(node->arrayElm.value);
     }
     break;
+  }
+
   case NODE_RETURN:
     if (node->expr) {
       freeAst(node->expr);
@@ -920,13 +1117,13 @@ AstNode *parseAst(Parser *p) {
   }
 
   // skips if the token is comment
-  if (p->current->type == TOKEN_COMMENT) {
-    p->idx++;
-    p->current = p->tokens[p->idx];
-  }
 
   Token *tkn = p->current;
   switch (tkn->type) {
+  case TOKEN_COMMENT: {
+    consume(TOKEN_COMMENT, p);
+    break;
+  }
   case TOKEN_PRINT: {
     AstNode *ast = parsePrint(p);
     consume(TOKEN_SEMI_COLON, p);

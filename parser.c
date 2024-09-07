@@ -204,8 +204,8 @@ int checkValidType(Token *typeToken) {
 
 // -------------------------for parsing ast -----------------------
 
-AstNode *newArrayNode(char *name, char *type, int isFixed, int size,
-                      AstNode **elements, Loc loc) {
+AstNode *newArrayNode(char *name, char *type, int isFixed, int actualSize,
+                      AstNode *size, AstNode **elements, Loc loc) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
     printf("unable to allocate new ast node\n");
@@ -217,12 +217,28 @@ AstNode *newArrayNode(char *name, char *type, int isFixed, int size,
   node->array.isFixed = isFixed;
   node->array.name = strdup(name);
   node->array.type = strdup(type);
+  node->array.actualSize = actualSize;
   node->array.arraySize = size;
   node->array.elements = elements;
   return node;
 }
 
-AstNode *newArrayDeclNode(char *name, char *type, int isFixed, int size,
+AstNode *newArrayElmAssignNode(char *name, AstNode *index, AstNode *value,
+                               Loc loc) {
+  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  if (!node) {
+    printf("unable to allocate new ast node\n");
+    exit(EXIT_FAILURE);
+  }
+  node->loc = loc;
+  node->type = NODE_ARRAY_ELEMENT_ASSIGN;
+  node->arrayElm.value = value;
+  node->arrayElm.index = index;
+  node->arrayElm.name = strdup(name);
+  return node;
+}
+
+AstNode *newArrayDeclNode(char *name, char *type, int isFixed, AstNode *size,
                           Loc loc) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
@@ -1106,30 +1122,128 @@ AstNode *parseWhileNode(Parser *p) {
   return newWhileNode(condition, body, loc);
 }
 
+// parses fixed size arrays
+void parseFixedArray(Parser *p, AstNode ***elements, Token *type,
+                     int *actualSize) {
+
+  int currentSize = 0;
+  int capacity = 10;
+
+  *elements = (AstNode **)malloc(sizeof(AstNode *) * capacity);
+  capacity *= 2;
+  *elements = (AstNode **)realloc(*elements, sizeof(AstNode *) * capacity);
+  if (elements == NULL) {
+    printf("cannot allocated enough memory for array elements of size");
+    exit(EXIT_FAILURE);
+  }
+
+  while (p->current->type != TOKEN_RCURLY) {
+    if (currentSize >= capacity) {
+      capacity *= 2;
+      *elements = (AstNode **)realloc(*elements, sizeof(AstNode *) * capacity);
+      if (elements == NULL) {
+        printf("cannot allocated enough memory for array elements of size");
+        exit(EXIT_FAILURE);
+      }
+    }
+
+    AstNode *ast = logical(p);
+    char *astType = getNodeType(ast->type);
+
+    if (strcmp(astType, type->value) != 0) {
+      printError(type, "cannot insert type of %s in array of type %s", astType,
+                 type->value);
+      exit(EXIT_FAILURE);
+    }
+
+    (*elements)[currentSize] = ast;
+
+    if (parserPeek(p)->type != TOKEN_RCURLY &&
+        p->current->type == TOKEN_COMMA) {
+      consume(TOKEN_COMMA, p);
+    }
+    currentSize++;
+  }
+  (*actualSize) = currentSize;
+}
+
+void parseDynamicArray(Parser *p, AstNode ***elements, Token *type,
+                       int *actualSize) {
+
+  int currentSize = 0;
+  int capacity = 10;
+
+  *elements = (AstNode **)malloc(sizeof(AstNode *) * capacity);
+  if (*elements == NULL) {
+    printf("cannot allocated enough memory for array *elements ");
+    exit(EXIT_FAILURE);
+  }
+
+  while (p->current->type != TOKEN_RCURLY) {
+
+    // reallocating the new mem size if the array is full
+
+    if (currentSize >= capacity) {
+      capacity *= 2;
+      *elements = (AstNode **)realloc(elements, sizeof(AstNode *) * capacity);
+      if (*elements == NULL) {
+        printf("cannot allocated enough memory for array *elements ");
+        exit(EXIT_FAILURE);
+      }
+    }
+
+    // consume the comma if the current token is comma but it is not in  the
+    // end
+
+    AstNode *ast = logical(p);
+    char *astType = getNodeType(ast->type);
+    if (strcmp(astType, type->value) != 0) {
+      printError(type, "cannot insert type of %s in array of type %s", astType,
+                 type->value);
+      exit(EXIT_FAILURE);
+    }
+
+    if (p->current->type == TOKEN_COMMA &&
+        parserPeek(p)->type != TOKEN_RCURLY) {
+      consume(TOKEN_COMMA, p);
+    }
+
+    (*elements)[currentSize] = ast;
+    currentSize++;
+  }
+  (*actualSize) = currentSize;
+}
+
 AstNode *parseArray(Parser *p) {
 
   AstNode **elements = NULL;
   Token *name = p->current;
   Token *type = NULL;
-  int arraySize = 0;
+  AstNode *arraySize = NULL;
   int isFixed = 0;
+  int actualSize = 0;
 
   // array name
   consume(TOKEN_IDEN, p);
   //[
   consume(TOKEN_LSQUARE, p);
 
-  // array size
-  if (p->current->type == TOKEN_NUMBER) {
-    arraySize = atoi(p->current->value);
-    isFixed = 1;
-    consume(TOKEN_NUMBER, p);
-  } else {
+  if (p->current->type == TOKEN_RSQUARE) {
     isFixed = 0;
+  } else {
+    arraySize = logical(p);
+    isFixed = 1;
   }
 
   //]
   consume(TOKEN_RSQUARE, p);
+
+  if (p->current->type == TOKEN_ASSIGN) {
+    consume(TOKEN_ASSIGN, p);
+    AstNode *value = logical(p);
+    char *nodeType = getNodeType(value->type);
+    return newArrayElmAssignNode(name->value, arraySize, value, *name->loc);
+  }
 
   //:
   consume(TOKEN_COLON, p);
@@ -1150,86 +1264,17 @@ AstNode *parseArray(Parser *p) {
   consume(TOKEN_ASSIGN, p);
 
   //{
+
   consume(TOKEN_LCURLY, p);
 
   if (isFixed) {
-
-    elements = (AstNode **)malloc(sizeof(AstNode *) * arraySize);
-    if (elements == NULL) {
-      printf("cannot allocated enough memory for array elements of size %d",
-             arraySize);
-      exit(EXIT_FAILURE);
-    }
-
-    int i = 0;
-    while (i < arraySize && p->current->type != TOKEN_RCURLY) {
-
-      AstNode *ast = logical(p);
-      char *astType = getNodeType(ast->type);
-
-      if (strcmp(astType, type->value) != 0) {
-        printError(type, "cannot insert type of %s in array of type %s",
-                   astType, type->value);
-        exit(EXIT_FAILURE);
-      }
-
-      elements[i] = ast;
-      if (parserPeek(p)->type != TOKEN_RCURLY &&
-          p->current->type == TOKEN_COMMA) {
-        consume(TOKEN_COMMA, p);
-      }
-      i++;
-    }
+    parseFixedArray(p, &elements, type, &actualSize);
   } else {
-
-    int currentSize = 0;
-    int capacity = 10;
-
-    elements = (AstNode **)malloc(sizeof(AstNode *) * capacity);
-    if (elements == NULL) {
-      printf("cannot allocated enough memory for array elements of size %d",
-             arraySize);
-      exit(EXIT_FAILURE);
-    }
-
-    while (p->current->type != TOKEN_RCURLY) {
-
-      // reallocating the new mem size if the array is full
-
-      if (currentSize >= capacity) {
-        capacity *= 2;
-        elements = (AstNode **)realloc(elements, sizeof(AstNode *) * capacity);
-        if (elements == NULL) {
-          printf("cannot allocated enough memory for array elements of size %d",
-                 arraySize);
-          exit(EXIT_FAILURE);
-        }
-      }
-
-      // consume the comma if the current token is comma but it is not in  the
-      // end
-
-      AstNode *ast = logical(p);
-      char *astType = getNodeType(ast->type);
-      if (strcmp(astType, type->value) != 0) {
-        printError(type, "cannot insert type of %s in array of type %s",
-                   astType, type->value);
-        exit(EXIT_FAILURE);
-      }
-
-      if (p->current->type == TOKEN_COMMA &&
-          parserPeek(p)->type != TOKEN_RCURLY) {
-        consume(TOKEN_COMMA, p);
-      }
-
-      elements[currentSize] = ast;
-      currentSize++;
-    }
-    arraySize = currentSize;
+    parseDynamicArray(p, &elements, type, &actualSize);
   }
 
   consume(TOKEN_RCURLY, p);
 
-  return newArrayNode(name->value, type->value, isFixed, arraySize, elements,
-                      *name->loc);
+  return newArrayNode(name->value, type->value, isFixed, actualSize, arraySize,
+                      elements, *name->loc);
 }

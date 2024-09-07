@@ -266,55 +266,53 @@ void updateSymbolTableValue(SymbolTable *table, char *varName, Result *value,
 
 void insertNumArraySymbol(SymbolTable *table, char *name, char *type, int size,
                           double *value, int isFixed) {
-  {
-    // Check if the symbol is already declared in the current scope
-    for (int i = table->size - 1; i >= 0; i--) {
-      if (!table->entries[i].isArray) {
-        continue;
-      }
-      if (strcmp(table->entries[i].symbol, name) == 0 &&
-          table->entries[i].scope == table->currentScope) {
-        printf("Error: Array '%s' is already declared in the current scope.\n",
-               name);
-        return;
-      }
+  // Check if the symbol is already declared in the current scope
+  for (int i = table->size - 1; i >= 0; i--) {
+    if (!table->entries[i].isArray) {
+      continue;
     }
-
-    if (table->size == table->capacity) {
-      table->capacity *= 2;
-      SymbolTableEntry *new_entries = (SymbolTableEntry *)realloc(
-          table->entries, table->capacity * sizeof(SymbolTableEntry));
-      if (!new_entries) {
-        // Handle reallocation failure
-        fprintf(stderr, "Memory reallocation failed\n");
-        exit(EXIT_FAILURE);
-      }
-      table->entries = new_entries;
+    if (strcmp(table->entries[i].symbol, name) == 0 &&
+        table->entries[i].scope == table->currentScope) {
+      printf("Error: Array '%s' is already declared in the current scope.\n",
+             name);
+      return;
     }
-
-    if (size > 0 && value) {
-      table->entries[table->size].value =
-          (double *)malloc(sizeof(double) * size);
-      for (int i = 0; i < size; i++) {
-        if (value[i]) {
-          ((int *)table->entries[table->size].value)[i] = value[i];
-        }
-      }
-    }
-
-    table->entries[table->size].symbol = strdup(name);
-    table->entries[table->size].type = strdup(type);
-    table->entries[table->size].isArray = 1;
-    table->entries[table->size].isFixed = isFixed;
-    table->entries[table->size].arraySize = size;
-    table->entries[table->size].scope =
-        table->currentScope; // Set the scope of the new symbol
-    table->size++;
   }
+
+  if (table->size == table->capacity) {
+    table->capacity *= 2;
+    SymbolTableEntry *new_entries = (SymbolTableEntry *)realloc(
+        table->entries, table->capacity * sizeof(SymbolTableEntry));
+    if (!new_entries) {
+      // Handle reallocation failure
+      fprintf(stderr, "Memory reallocation failed\n");
+      exit(EXIT_FAILURE);
+    }
+    table->entries = new_entries;
+  }
+
+  if (size > 0 && value) {
+    table->entries[table->size].value = (double *)malloc(sizeof(double) * size);
+    for (int i = 0; i < size; i++) {
+
+      if (value[i]) {
+        ((double *)table->entries[table->size].value)[i] = value[i];
+      }
+    }
+  }
+
+  table->entries[table->size].symbol = strdup(name);
+  table->entries[table->size].type = strdup(type);
+  table->entries[table->size].isArray = 1;
+  table->entries[table->size].isFixed = isFixed;
+  table->entries[table->size].arraySize = size;
+  table->entries[table->size].scope =
+      table->currentScope; // Set the scope of the new symbol
+  table->size++;
 }
 
 void insertStrArraySymbol(SymbolTable *table, char *name, char *type, int size,
-                          char **value, int isFixed) {
+                          char **value, int isFixed, int actualSize) {
 
   // Check if the symbol is already declared in the current scope
   for (int i = table->size - 1; i >= 0; i--) {
@@ -343,7 +341,7 @@ void insertStrArraySymbol(SymbolTable *table, char *name, char *type, int size,
 
   if (size > 0 && value) {
     table->entries[table->size].value = (char **)malloc(sizeof(char *) * size);
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < actualSize; i++) {
       if (value[i]) {
         ((char **)table->entries[table->size].value)[i] = strdup(value[i]);
       }
