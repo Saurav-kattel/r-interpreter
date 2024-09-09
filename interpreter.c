@@ -480,7 +480,9 @@ Result *EvalAst(AstNode *node, Parser *p) {
     if (strcmp(type, var->type) != 0) {
       printEvalError(node->loc, "cannot assign type of %s to type of %s", type,
                      var->type);
-      free(res->result);
+      if (res->NodeType == NODE_STRING_LITERAL) {
+        free(res->result);
+      }
       free(res);
       exit(EXIT_FAILURE);
     }
