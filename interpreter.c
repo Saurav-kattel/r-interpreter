@@ -605,6 +605,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
     break;
   }
 
+*/
   case NODE_FUNCTION_READ_IN: {
     int initialBufferSize = 100;
     int currentBufferSize = 0;
@@ -660,6 +661,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
     free(buffer);
     return res;
   }
+    /*
 
   case NODE_FUNCTION_PRINT: {
 
