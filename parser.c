@@ -35,7 +35,7 @@ void populateTokens(Parser *p, Lexer *lex, int initialCapacity, int *size) {
     exit(EXIT_FAILURE);
   }
 
-  *size = 0; // Initialize size
+  *size = 0; // Initialize sizepa
   Token *tkn = GetNextToken(lex);
 
   while (tkn->type != TOKEN_EOF) {
@@ -73,7 +73,7 @@ void populateTokens(Parser *p, Lexer *lex, int initialCapacity, int *size) {
   (*size)++;
 }
 // initializing the parser
-Parser *InitParser(Lexer *lex, SymbolTable *table) {
+Parser *InitParser(Lexer *lex, SymbolContext *ctx) {
   Parser *p = (Parser *)malloc(sizeof(Parser));
   if (p == NULL) {
     printf("unable to allocate parser");
@@ -83,10 +83,11 @@ Parser *InitParser(Lexer *lex, SymbolTable *table) {
   memset(p, 0, sizeof(Parser));
   p->lex = lex;
   int size = 0;
+  p->level = 0;
   p->idx = 0;
   int initialCapacity = 100;
   populateTokens(p, lex, initialCapacity, &size);
-  p->table = table;
+  p->ctx = ctx;
   p->current = p->tokens[0];
   p->size = size;
   return p;
@@ -577,6 +578,7 @@ AstNode *factor(Parser *p) {
     AstNode *node = parseReadIn(p);
     return node;
   }
+
   case TOKEN_FOR: {
     return parseForLoop(p);
   }
@@ -656,11 +658,22 @@ AstNode *handleStringIdentifiers(Parser *p, Token *typeToken, char *varName,
 AstNode *handleIdenIdentifiers(Parser *p, Token *typeToken, char *varName,
                                int nodeType) {
   AstNode *valueNode = logical(p);
-
   return newIdentifierNode(typeToken->value, varName, valueNode, p, nodeType, 0,
                            *typeToken->loc);
 }
 
+AstNode *handleIdenReadIn(Parser *p, Token *typeToken, char *varName,
+                          int nodeType) {
+  AstNode *valueNode = logical(p);
+  return newIdentifierNode(typeToken->value, varName, valueNode, p, nodeType, 0,
+                           *typeToken->loc);
+}
+AstNode *handleReadInIdentiers(Parser *p, Token *typeToken, char *varname,
+                               int nodeType) {
+  AstNode *valueNode = logical(p);
+  return newIdentifierNode(typeToken->value, varname, valueNode, p, nodeType, 0,
+                           *typeToken->loc);
+}
 // handles  variables
 
 AstNode *varDecleration(Parser *p) {
@@ -710,8 +723,13 @@ AstNode *varDecleration(Parser *p) {
       node = handleIdenIdentifiers(p, &newToken, varName,
                                    NODE_IDENTIFIER_MUTATION);
       break;
+    case TOKEN_READ_IN: {
+      node = handleReadInIdentiers(p, &newToken, varName,
+                                   NODE_IDENTIFIER_MUTATION);
+      break;
+    }
     default:
-      printError(p->current, "unknown token \"%s\"",
+      printError(p->current, "unknown token \"%s\" \n",
                  tokenNames[p->current->type]);
       free(newToken.value);
       free(varName);
@@ -755,6 +773,11 @@ AstNode *varDecleration(Parser *p) {
     node = handleIdenIdentifiers(p, typeToken, varName,
                                  NODE_IDENTIFIER_ASSIGNMENT);
     break;
+  case TOKEN_READ_IN: {
+
+    node = parseReadIn(p);
+    break;
+  }
   default:
     printError(p->current, "unexpected token %s\n",
                tokenNames[p->current->type]);
@@ -800,14 +823,15 @@ AstNode *parseBlockStmt(Parser *p) {
   blockNode->block.statements = NULL;
   blockNode->block.statementCount = 0;
 
-  enterScope(p->table);
+  // TODO: implement enter and exit scope funCtions
+  //  enterScope(p->table);
 
   while (p->current->type != TOKEN_RCURLY && !parserIsAtEnd(p)) {
     AstNode *stmt = parseAst(p);
     addStatementToBlock(blockNode, stmt);
   }
   consume(TOKEN_RCURLY, p);
-  exitScope(p->table);
+  // exitScope(p->table);
   return blockNode;
 }
 
@@ -856,6 +880,7 @@ AstNode *newFnParams(Parser *p, char *fnName, char *returnType, int paramsCount,
   }
   node->type = NODE_FUNCTION;
   node->loc = *p->current->loc;
+  node->isParam = 1;
   node->function.defination.params = params;
   node->function.defination.returnType = strdup(returnType);
   node->function.defination.name = strdup(fnName);

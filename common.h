@@ -6,38 +6,56 @@
 // Forward declare AstNode for use in SymbolTableEntry
 typedef struct AstNode AstNode;
 
-typedef struct SymbolTable {
-  struct SymbolTableEntry *entries;
-  int size;
-  int capacity;
-  int currentScope;
-
-} SymbolTable;
+typedef struct FuncParams {
+  char *type;
+  char *name;
+  int isFunc;  // if the parameter is a
+  int isArray; // if the parameter is an array
+  void *value;
+} FuncParams;
 
 typedef struct SymbolTableEntry {
-
-  char *symbol;  // name of the symbol
-  char *type;    // Type field for each symbol table entry
-  void *value;   // Use a void pointer to store values of different types
-  int isFn;      // determines the the symbol entry is function or just variable
+  char *symbol; // name of the symbol
+  char *type;   // Type field for each symbol table entry
+  int isGlobal; // Flag to determine if it is global
+  // arrays
   int isArray;   // determines the the symbol entry is array or just variable
   int isFixed;   // determies if the array is dynamic or fixed size array
   int arraySize; // keeps the recored of the size of array;
-  int isParam; // determines the the symbol entry is function parameter or just
-               // variable
 
-  int scope; // Scope field for each symbol table entry
-
+  // functions
+  int isFn;
   struct {
-    char *name;           // Name of the function
-    char *returnType;     // Return type of the function (e.g., "int", "string")
-    int parameterCount;   // Number of parameters
-    AstNode **parameters; // Array of parameter entries (variables)
-    // Symbol table for function's local variables
-    int scopeLevel;
-    AstNode *functionBody; // AST node representing the function's body
+    int parameterCount; // Number of parameters
+    FuncParams **params;
+    AstNode *body;
   } function;
+
+  void *value; // Use a void pointer to store values of different types
 } SymbolTableEntry;
+
+typedef struct SymbolTable {
+  struct SymbolTableEntry **entries;
+  int size;
+  int capacity;
+  int currentScope;
+} SymbolTable;
+
+typedef struct StackFrame {
+  SymbolTable *localTable; // Local symbol table for this frame
+  int stackLevel;          // Scope level of the frame
+} StackFrame;
+
+typedef struct Stack {
+  StackFrame **frames; // Array of pointers to stack frames
+  int frameCount;      // Number of active frames
+  int capacity;        // Capacity of the stack
+} Stack;
+
+typedef struct SymbolContext {
+  SymbolTable *globalTable;
+  Stack *stack;
+} SymbolContext;
 
 typedef struct Result {
   int NodeType;
@@ -53,8 +71,9 @@ typedef struct {
   Token **tokens;
   int idx;
   int size;
+  int level;
 
-  SymbolTable *table;
+  SymbolContext *ctx;
 } Parser;
 struct AstNode {
   int type;

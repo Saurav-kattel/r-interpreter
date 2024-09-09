@@ -89,7 +89,7 @@ AstNode *functionCall(Parser *p);
 AstNode *parseReadIn(Parser *p);
 AstNode *oarseArrayDecl(Parser *p);
 // utils
-Parser *InitParser(Lexer *, SymbolTable *);
+Parser *InitParser(Lexer *, SymbolContext *);
 void freeAst(AstNode *);
 void consume(TokenType, Parser *);
 void printError(Token *, const char *s, ...);

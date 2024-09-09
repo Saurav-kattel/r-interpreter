@@ -6,28 +6,38 @@
 #define INITIAL_CAPACITY 8
 #define TABLE_SIZE 101 // Size of the hash table
 
-// Enum for different symbol types
-typedef enum { SYMBOL_VARIABLE, SYMBOL_FUNCTION, SYMBOL_TYPE } SymbolType;
+typedef enum SymbolKind {
+  SYMBOL_KIND_FUNCTION,
+  SYMBOL_KIND_ARRAYS,
+  SYMBOL_KIND_VARIABLES,
+} SymbolKind;
 
-SymbolTable *createSymbolTable(int initialCapacity);
-SymbolTableEntry *lookupFnSymbol(SymbolTable *table, char *symbol);
+typedef enum SymbolError {
+  SYMBOL_TYPE_ERROR,
+  SYMBOL_DUPLICATE_ERROR,
+  SYMBOL_NOT_FOUND_ERROR,
+  SYMBOL_MEM_ERROR,
+  SYMBOL_ERROR_NONE,
+} SymbolError;
 
-void insertSymbol(SymbolTable *table, char *symbol, char *type, Result *value,
-                  int isParam);
+static const char *errorName[] = {
+    "symbol_type_error", "symbol_duplicate_error", "symbol_not_found_error",
+    "symbol_mem_error",  "symbol_error_none",
+};
 
-void insertFnSymbol(SymbolTable *table, char *fnName, char *returnType,
-                    AstNode **params, AstNode *fnBody, int capacity);
+SymbolError insertGlobalSymbol(SymbolContext *ctx, char *type, char *name,
+                               Result *value, SymbolKind kind);
 
-SymbolTableEntry *lookupSymbol(SymbolTable *table, char *symbol, int Param);
+SymbolError insertFunctionSymbol(SymbolContext *ctx, char *name, char *type,
+                                 int paramCount, FuncParams **params,
+                                 SymbolKind kind, AstNode *body, int level);
+SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
+                               SymbolKind kind);
 
-void enterScope(SymbolTable *table);
-void updateSymbolTableValue(SymbolTable *table, char *varName, Result *value,
-                            char *type);
-void exitScope(SymbolTable *table);
-void printFnSymbolTable(SymbolTable *);
-void insertNumArraySymbol(SymbolTable *table, char *name, char *type, int size,
-                          double *value, int isFixed);
-void insertStrArraySymbol(SymbolTable *table, char *name, char *type, int size,
-                          char **value, int isFixed, int actualSize);
+SymbolError insertSymbol(SymbolContext *ctx, char *type, char *name,
+                         Result *value, SymbolKind kind);
 
+SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value);
+
+SymbolContext *createSymbolContext(int capacity);
 #endif // SYMBOL_H_
