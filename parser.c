@@ -35,7 +35,7 @@ void populateTokens(Parser *p, Lexer *lex, int initialCapacity, int *size) {
     exit(EXIT_FAILURE);
   }
 
-  *size = 0; // Initialize size
+  *size = 0; // Initialize sizepa
   Token *tkn = GetNextToken(lex);
 
   while (tkn->type != TOKEN_EOF) {
@@ -73,7 +73,7 @@ void populateTokens(Parser *p, Lexer *lex, int initialCapacity, int *size) {
   (*size)++;
 }
 // initializing the parser
-Parser *InitParser(Lexer *lex, SymbolTable *table) {
+Parser *InitParser(Lexer *lex, SymbolContext *ctx) {
   Parser *p = (Parser *)malloc(sizeof(Parser));
   if (p == NULL) {
     printf("unable to allocate parser");
@@ -83,10 +83,11 @@ Parser *InitParser(Lexer *lex, SymbolTable *table) {
   memset(p, 0, sizeof(Parser));
   p->lex = lex;
   int size = 0;
+  p->level = 0;
   p->idx = 0;
   int initialCapacity = 100;
   populateTokens(p, lex, initialCapacity, &size);
-  p->table = table;
+  p->ctx = ctx;
   p->current = p->tokens[0];
   p->size = size;
   return p;

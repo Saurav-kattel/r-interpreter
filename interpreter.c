@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #define MAX_STRING_LENGTH 255
 
@@ -38,8 +37,6 @@ void printEvalError(Loc loc, const char *s, ...) {
   va_end(args);
 
   printf("\n");
-  // Print the context based on the token's location
-  // printContext(tkn);
 }
 
 static double convertStrToDouble(char *s) {
@@ -70,7 +67,6 @@ void freeResult(Result *res) {
 }
 
 void insertFixedStringArray(AstNode *node, Parser *p, int *size) {
-
   char *values[node->array.actualSize];
 
   for (int i = 0; i < node->array.actualSize; i++) {
@@ -113,9 +109,9 @@ void handleFixedArrayInsert(AstNode *node, Parser *p) {
   int size = (int)arraySize;
 
   if (strcmp(node->array.type, "string") == 0) {
-    insertFixedStringArray(node, p, &size);
+    //  insertFixedStringArray(node, p, &size);
   } else if (strcmp(node->array.type, "number") == 0) {
-    insertFixedNumberArray(node, p, &size);
+    // insertFixedNumberArray(node, p, &size);
   }
 }
 
@@ -149,6 +145,25 @@ void insertDynamicStringArray(AstNode *node, Parser *p) {
     }
   }
   free(values);
+}
+
+void printSymbolError(SymbolError err, Loc loc, char *name, char *type) {
+  switch (err) {
+  case SYMBOL_MEM_ERROR:
+    printEvalError(loc, "failed allocating memory");
+    break;
+  case SYMBOL_TYPE_ERROR:
+    printEvalError(loc, "TypeError: cannot assign type of %s", type);
+    break;
+  case SYMBOL_DUPLICATE_ERROR:
+    printEvalError(loc, "ReferenceError: %s is already declared\n", name);
+    break;
+  case SYMBOL_NOT_FOUND_ERROR:
+    printEvalError(loc, "ReferenceError: %s is not declared", name);
+    break;
+  case SYMBOL_ERROR_NONE:
+    break;
+  }
 }
 
 void insertDynamicNumberArray(AstNode *node, Parser *p) {
@@ -218,722 +233,737 @@ static char *getDataType(Result *res) {
 }
 
 Result *EvalAst(AstNode *node, Parser *p) {
-  /*
   switch (node->type) {
 
-      case NODE_RETURN: {
-        Result *res = EvalAst(node->expr, p);
-        res->isReturn = 1;
-        return res;
-      }
+  case NODE_RETURN: {
+    Result *res = EvalAst(node->expr, p);
+    res->isReturn = 1;
+    return res;
+  }
 
-      case NODE_NUMBER: {
-        Result *res = newResult(&node->number, NODE_NUMBER,
-      sizeof(node->number)); return res;
-      }
+  case NODE_NUMBER: {
+    Result *res = newResult(&node->number, NODE_NUMBER, sizeof(node->number));
+    return res;
+  }
 
-      case NODE_FUNCTION_PARAM: {
-        enterScope(p->table);
-        insertSymbol(p->table, node->identifier.name, node->identifier.type,
-      NULL, node->isParam); exitScope(p->table); break;
-      }
+    /*
+              case NODE_FUNCTION_PARAM: {
+                enterScope(p->table);
+                insertSymbol(p->table, node->identifier.name,
+       node->identifier.type, NULL, node->isParam); exitScope(p->table); break;
+              }
 
-      case NODE_FUNCTION: {
-        SymbolTableEntry *sym =
-            lookupFnSymbol(p->table, node->function.defination.name);
-        if (sym) {
-          exit(EXIT_FAILURE);
-        }
-
-        insertFnSymbol(
-            p->table, node->function.defination.name,
-            node->function.defination.returnType,
-      node->function.defination.params, node->function.defination.body,
-      node->function.defination.paramsCount);
-
-        for (int i = 0; i < node->function.defination.paramsCount; i++) {
-          Result *res = EvalAst(node->function.defination.params[i], p);
-          if (res) {
-            free(res->result);
-            free(res);
-          }
-        }
-
-        break;
-      }
-      case NODE_FUNCTION_CALL: {
-        SymbolTableEntry *sym = lookupFnSymbol(p->table,
-      node->function.call.name); if (!sym) { printEvalError(node->loc,
-      "undeclared function %s was called\n", node->function.call.name);
-          exit(EXIT_FAILURE);
-        }
-        // update the func symbol table params with the value of args
-        enterScope(p->table);
-
-        for (int i = 0; i < node->function.call.argsCount; i++) {
-          Result *res = EvalAst(node->function.call.args[i], p);
-          char *paramType = sym->function.parameters[i]->identifier.type;
-
-          if (strcmp(paramType, getDataType(res)) != 0) {
-            printEvalError(node->loc, "expected argument of type %s but got %s",
-                           paramType, getDataType(res));
-            exit(EXIT_FAILURE);
-          }
-
-          updateSymbolTableValue(p->table,
-                                 sym->function.parameters[i]->identifier.name,
-      res, sym->function.parameters[i]->identifier.type, 1);
-        }
-        exitScope(p->table);
-
-        Result *value = EvalAst(sym->function.functionBody, p);
-
-        if (sym->function.returnType && (value == NULL)) {
-          printEvalError(node->loc, "expected return type to be %s but got
-      void\n", sym->function.returnType); exit(EXIT_FAILURE);
-        }
-
-        if (strcmp(sym->function.returnType, getDataType(value)) != 0) {
-          printEvalError(node->loc,
-                         " cannot return %s "
-                         "from the function with the return type of %s ",
-                         getDataType(value), sym->function.returnType);
-          exit(EXIT_FAILURE);
-        }
-
-        return value;
-      }
-
-      case NODE_BINARY_OP: {
-        Result *left = EvalAst(node->binaryOp.left, p);
-        Result *right = EvalAst(node->binaryOp.right, p);
-
-        if (!left || !right) {
-          printEvalError(node->loc, "Error: Null result encountered\n");
-          exit(EXIT_FAILURE);
-        }
-
-        Result *res = NULL;
-        if (left->NodeType == NODE_NUMBER && right->NodeType == NODE_NUMBER) {
-          double leftVal = *(double *)(left->result);
-          double rightVal = *(double *)(right->result);
-
-          switch (node->binaryOp.op) {
-          case TOKEN_PLUS:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal + rightVal;
-            break;
-          case TOKEN_MINUS:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal - rightVal;
-            break;
-          case TOKEN_MODULO:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = (int)leftVal % (int)rightVal;
-            break;
-          case TOKEN_MULTIPLY:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal * rightVal;
-            break;
-          case TOKEN_DIVIDE:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal / rightVal;
-            break;
-          case TOKEN_DB_EQUAL:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal == rightVal;
-            break;
-          case TOKEN_EQ_GREATER:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal >= rightVal;
-            break;
-          case TOKEN_EQ_LESSER:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal <= rightVal;
-            break;
-          case TOKEN_LESSER:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal < rightVal;
-            break;
-          case TOKEN_GREATER:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal > rightVal;
-            break;
-          case TOKEN_EQ_NOT:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = leftVal != rightVal;
-            break;
-          case TOKEN_AND:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = (leftVal && rightVal);
-            break;
-          case TOKEN_OR:
-            res = newResult(malloc(sizeof(double)), NODE_NUMBER,
-      sizeof(double));
-            *(double *)(res->result) = (leftVal || rightVal);
-            break;
-          default:
-            printEvalError(node->loc, "Error: Unknown binary operator\n");
-            exit(EXIT_FAILURE);
-          }
-
-          // Free the results used
-          free(left);
-          free(right);
-          return res;
-        } else if (left->NodeType == NODE_STRING_LITERAL &&
-                   right->NodeType == NODE_STRING_LITERAL) {
-          char *leftStr = trimQuotes((char *)left->result);
-          char *rightStr = trimQuotes((char *)right->result);
-
-          size_t len1 = strlen(leftStr);
-          size_t len2 = strlen(rightStr);
-
-          char *concatenated = (char *)malloc(len1 + len2 + 1);
-          if (concatenated == NULL) {
-            fprintf(stderr, "Memory allocation failed\n");
-            exit(EXIT_FAILURE);
-          }
-
-          strcpy(concatenated, leftStr);
-          strcat(concatenated, rightStr);
-
-          freeResult(
-              left); // Assuming leftStr and rightStr were allocated from `left`
-          freeResult(right); // Assuming rightStr was allocated from `right`
-
-          return newResult(concatenated, NODE_STRING_LITERAL, len1 + len2 + 1);
-        } else {
-          printEvalError(
-              node->loc, "Error: cannot do ( %s ) operations between %s and %s
-      \n", tokenNames[node->binaryOp.op], getDataType(left),
-      getDataType(right)); exit(EXIT_FAILURE);
-        }
-      }
-
-      case NODE_UNARY_OP: {
-        Result *right = EvalAst(node->unaryOp.right, p);
-        if (right->NodeType == NODE_NUMBER) {
-          double rightVal = *(double *)(right->result);
-          switch (node->unaryOp.op) {
-          case TOKEN_NOT: {
-            Result *node =
-                newResult(&(double){!rightVal}, NODE_NUMBER, sizeof(double));
-            free(right->result);
-            free(right);
-            return node;
-          }
-          default:
-            printEvalError(node->loc, "Error: Unknown unary operator\n");
-            exit(EXIT_FAILURE);
-          }
-        } else {
-          printEvalError(node->loc, "Error: Invalid type for unary
-      operation\n"); exit(EXIT_FAILURE);
-        }
-      }
-
-      case NODE_IDENTIFIER_VALUE: {
-
-        SymbolTableEntry *var =
-            lookupSymbol(p->table, node->identifier.name, node->isParam);
-
-        if (!var) {
-          printEvalError(node->loc, "%s is not decleared\n",
-      node->identifier.name); exit(EXIT_FAILURE);
-        }
-
-        if (strcmp(var->type, "string") == 0) {
-          return newResult((char *)var->value, NODE_STRING_LITERAL,
-                           sizeof(var->value));
-        }
-        return newResult(var->value, NODE_NUMBER, sizeof(var->value));
-      }
-
-      case NODE_IDENTIFIER_MUTATION: {
-        SymbolTableEntry *var =
-            lookupSymbol(p->table, node->identifier.name, node->isParam);
-        if (!var) {
-          printEvalError(node->loc, "%s is not decleared\n",
-      node->identifier.name); exit(EXIT_FAILURE);
-        }
-
-        Result *res = EvalAst(node->identifier.value, p);
-        char *type = getDataType(res);
-
-        if (strcmp(type, var->type) != 0) {
-          printEvalError(node->loc, "cannot assign type of %s to type of %s",
-      type, var->type); free(res->result); free(res); exit(EXIT_FAILURE);
-        }
-
-        updateSymbolTableValue(p->table, node->identifier.name, res, var->type,
-                               node->isParam);
-        break;
-      }
-
-      case NODE_IDENTIFIER_ASSIGNMENT: {
-        SymbolTableEntry *var = lookupSymbol(p->table, node->identifier.name,
-      0); if (var && (!var->isParam)) { printEvalError(node->loc, "cannot
-      redeclare variable %s is already decleared\n", node->identifier.name);
-          exit(EXIT_FAILURE);
-        }
-
-        Result *res = EvalAst(node->identifier.value, p);
-
-        char *inferedDataType = getDataType(res);
-
-        if (strcmp(node->identifier.type, inferedDataType) != 0) {
-          printEvalError(node->loc, "cannot assign typeof %s to %s\n",
-                         inferedDataType, node->identifier.type);
-          free(res->result);
-          free(res);
-          exit(EXIT_FAILURE);
-        }
-        insertSymbol(p->table, node->identifier.name, node->identifier.type,
-      res, node->isParam); return res;
-      }
-
-      case NODE_IDENTIFIER_DECLERATION: {
-        SymbolTableEntry *var =
-            lookupSymbol(p->table, node->identifier.name, node->isParam);
-        if (var) {
-          printEvalError(node->loc,
-                         "cannot redeclare variable %s is already decleared\n",
-                         node->identifier.name);
-          exit(EXIT_FAILURE);
-        }
-
-        insertSymbol(p->table, node->identifier.name, node->identifier.type,
-      NULL, node->isParam);
-
-        break;
-      }
-
-      case NODE_STRING_LITERAL: {
-        char *str = strdup(node->stringLiteral.value);
-        Result *res = newResult(str, NODE_STRING_LITERAL, strlen(str) + 1);
-        free(str);
-        return res;
-      }
-
-      case NODE_BLOCK: {
-        enterScope(p->table);
-        for (int i = 0; i < node->block.statementCount; i++) {
-          AstNode *ast = node->block.statements[i];
-          Result *result = EvalAst(ast, p);
-          if (result && (result->isReturn || result->isBreak)) {
-            exitScope(p->table);
-            return result;
-          } else if (result && ast->type == NODE_FUNCTION_READ_IN) {
-            // pending
-            return result;
-          }
-        };
-
-        exitScope(p->table);
-        return NULL;
-      }
-
-      case NODE_IF_ELSE: {
-        Result *conditionResult = EvalAst(node->ifElseBlock.condition, p);
-        if (conditionResult->NodeType != NODE_NUMBER) {
-          printEvalError(
-              node->loc,
-              "Error: Condition in if-else must be a number (interpreted as "
-              "boolean)\n");
-          exit(EXIT_FAILURE);
-        }
-
-        double conditionValue = *(double *)(conditionResult->result);
-
-        freeResult(conditionResult);
-
-        if (conditionValue) {
-          Result *val = EvalAst(node->ifElseBlock.ifBlock, p);
-          if (val) {
-            return val;
-          }
-        } else if (node->ifElseBlock.elseBlock != NULL) {
-          Result *val = EvalAst(node->ifElseBlock.elseBlock, p);
-          if (val) {
-            return val;
-          }
-        }
-        break;
-      }
-
-      case NODE_FUNCTION_READ_IN: {
-        int initialBufferSize = 100;
-        int currentBufferSize = 0;
-
-        char *buffer = (char *)malloc(sizeof(char) * initialBufferSize);
-        if (buffer == NULL) {
-          perror("Failed to allocate memory for buffer");
-          exit(EXIT_FAILURE);
-        }
-
-        while (1) {
-          if (currentBufferSize >= initialBufferSize - 1) {
-            initialBufferSize += 100;
-            char *newBuffer =
-                (char *)realloc(buffer, sizeof(char) * initialBufferSize);
-            if (newBuffer == NULL) {
-              perror("Failed to reallocate memory");
-              free(buffer); // Free original buffer before exiting
-              exit(EXIT_FAILURE);
-            }
-            buffer = newBuffer;
-          }
-
-          char ch = getchar();
-          if (ch == '\n') {
-            break;
-          }
-          buffer[currentBufferSize] = ch;
-          currentBufferSize++;
-        }
-
-        buffer[currentBufferSize] = '\0';
-
-        Result *res = NULL;
-
-        if (strcmp(node->read.type, "string") == 0) {
-          res = newResult(buffer, NODE_STRING_LITERAL,
-                          currentBufferSize + 1); // Include null terminator
-        } else if (strcmp(node->read.type, "number") == 0) {
-          double numberValue;
-          sscanf(buffer, "%lf", &numberValue);
-
-          double *ptr = (double *)malloc(sizeof(double));
-          if (ptr == NULL) {
-            perror("Failed to allocate memory for number");
-            free(buffer); // Free buffer before exiting
-            exit(EXIT_FAILURE);
-          }
-          *ptr = numberValue;
-          res = newResult((void *)ptr, NODE_NUMBER, sizeof(double));
-        }
-
-        free(buffer);
-        return res;
-      }
-
-      case NODE_FUNCTION_PRINT: {
-
-        for (int i = 0; i < node->print.statementCount; i++) {
-
-          char *name = node->print.statments[i]->array.name;
-          SymbolTableEntry *entry = lookupSymbol(p->table, name, 0);
-          if (entry && entry->isArray) {
-            printf(GREEN "[" RESET);
-            for (int j = 0; j < entry->arraySize; j++) {
-              if (strcmp(entry->type, "string") == 0) {
-                // Check if the string array element exists
-                if (entry->value && ((char **)entry->value)[j]) {
-                  printf(YELLOW " %s " RESET, ((char **)entry->value)[j]);
+              case NODE_FUNCTION: {
+                SymbolTableEntry *sym =
+                    lookupFnSymbol(p->table, node->function.defination.name);
+                if (sym) {
+                  exit(EXIT_FAILURE);
                 }
-              } else {
-                // Check if the integer array element exists
-                if (entry->value && ((double *)entry->value)[j]) {
-                  printf(BLUE " %.0lf " RESET, ((double *)entry->value)[j]);
+
+                insertFnSymbol(
+                    p->table, node->function.defination.name,
+                    node->function.defination.returnType,
+              node->function.defination.params, node->function.defination.body,
+              node->function.defination.paramsCount);
+
+                for (int i = 0; i < node->function.defination.paramsCount; i++)
+       { Result *res = EvalAst(node->function.defination.params[i], p); if (res)
+       { free(res->result); free(res);
+                  }
                 }
+
+                break;
               }
-              if (j < entry->arraySize - 1) {
-                printf(MAGENTA "," RESET);
+              case NODE_FUNCTION_CALL: {
+                SymbolTableEntry *sym = lookupFnSymbol(p->table,
+              node->function.call.name); if (!sym) { printEvalError(node->loc,
+              "undeclared function %s was called\n", node->function.call.name);
+                  exit(EXIT_FAILURE);
+                }
+                // update the func symbol table params with the value of args
+                enterScope(p->table);
+
+                for (int i = 0; i < node->function.call.argsCount; i++) {
+                  Result *res = EvalAst(node->function.call.args[i], p);
+                  char *paramType =
+       sym->function.parameters[i]->identifier.type;
+
+                  if (strcmp(paramType, getDataType(res)) != 0) {
+                    printEvalError(node->loc, "expected argument of type %s but
+       got %s", paramType, getDataType(res)); exit(EXIT_FAILURE);
+                  }
+
+                  updateSymbolTableValue(p->table,
+                                         sym->function.parameters[i]->identifier.name,
+              res, sym->function.parameters[i]->identifier.type, 1);
+                }
+                exitScope(p->table);
+
+                Result *value = EvalAst(sym->function.functionBody, p);
+
+                if (sym->function.returnType && (value == NULL)) {
+                  printEvalError(node->loc, "expected return type to be %s but
+       got void\n", sym->function.returnType); exit(EXIT_FAILURE);
+                }
+
+                if (strcmp(sym->function.returnType, getDataType(value)) != 0) {
+                  printEvalError(node->loc,
+                                 " cannot return %s "
+                                 "from the function with the return type of %s
+       ", getDataType(value), sym->function.returnType); exit(EXIT_FAILURE);
+                }
+
+                return value;
               }
-            }
-            printf(GREEN "]\n" RESET);
-          } else if (entry && entry->isFn) {
-            printEvalError(node->loc, "cannot call function directly from
-      println"); exit(EXIT_FAILURE); } else { Result *res =
-      EvalAst(node->print.statments[i], p); if (res) { if (res->NodeType ==
-      NODE_STRING_LITERAL) { printf(YELLOW "%s" RESET, trimQuotes((char
-      *)res->result)); } else { printf(BLUE "%lf" RESET, *(double
-      *)res->result);
-              }
-              freeResult(res);
-            } else {
-              printf(RED "(NULL) RESET\n");
-            }
-          }
-        }
-        printf("\n");
+
+*/
+
+  case NODE_BINARY_OP: {
+    Result *left = EvalAst(node->binaryOp.left, p);
+    Result *right = EvalAst(node->binaryOp.right, p);
+
+    if (!left || !right) {
+      printEvalError(node->loc, "Error: Null result encountered\n");
+      exit(EXIT_FAILURE);
+    }
+
+    Result *res = NULL;
+    if (left->NodeType == NODE_NUMBER && right->NodeType == NODE_NUMBER) {
+      double leftVal = *(double *)(left->result);
+      double rightVal = *(double *)(right->result);
+
+      switch (node->binaryOp.op) {
+      case TOKEN_PLUS:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal + rightVal;
         break;
-      }
-
-      case NODE_ARRAY_ELEMENT_ACCESS: {
-        SymbolTableEntry *var =
-            lookupSymbol(p->table, node->arrayElm.name, node->isParam);
-
-        if (!var || !var->isArray) {
-          printEvalError(node->loc, " %s is not decleared\n",
-      node->arrayElm.name); exit(EXIT_FAILURE);
-        }
-        Result *res = EvalAst(node->arrayElm.index, p);
-        if (!res) {
-          printEvalError(node->loc, "invalid index");
-          exit(EXIT_FAILURE);
-        }
-        double idx = *(double *)res->result;
-        int index = (int)idx;
-        free(res);
-        if (index >= var->arraySize) {
-          printEvalError(node->loc, "index out of bound");
-          exit(EXIT_FAILURE);
-        }
-
-        if (strcmp(var->type, "string") == 0) {
-          char *value = ((char **)var->value)[index];
-          return newResult(value, NODE_STRING_LITERAL, 0);
-        } else {
-          double value = ((double *)var->value)[index];
-          return newResult(&value, NODE_NUMBER, 0);
-        }
-      }
-
-        // needs refactoring
-      case NODE_ARRAY_INIT: {
-        SymbolTableEntry *var =
-            lookupSymbol(p->table, node->array.name, node->isParam);
-
-        if (var) {
-          printEvalError(node->loc, "cannot redeclare %s is already
-      decleared\n", node->array.name); exit(EXIT_FAILURE);
-        }
-
-        if (node->array.isFixed) {
-          handleFixedArrayInsert(node, p);
-        } else {
-          handleDynamicArrayInsert(node, p);
-        }
+      case TOKEN_MINUS:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal - rightVal;
         break;
-      }
-
-      case NODE_ARRAY_DECLARATION: {
-        SymbolTableEntry *var =
-            lookupSymbol(p->table, node->array.name, node->isParam);
-
-        if (var) {
-          printEvalError(node->loc, "cannot redeclare  %s is already
-      decleared\n", node->identifier.name); exit(EXIT_FAILURE);
-        }
-
-        if (node->array.arraySize) {
-          Result *result = EvalAst(node->array.arraySize, p);
-          double size = *(double *)result->result;
-          if (strcmp(node->array.type, "string") == 0) {
-            insertStrArraySymbol(p->table, node->array.name, node->array.type,
-      size, NULL, node->array.isFixed, node->array.actualSize); } else {
-            insertNumArraySymbol(p->table, node->array.name, node->array.type,
-      size, NULL, node->array.isFixed);
-          }
-        } else {
-          if (strcmp(node->array.type, "string") == 0) {
-            insertStrArraySymbol(p->table, node->array.name, node->array.type,
-      0, NULL, node->array.isFixed, node->array.actualSize); } else {
-            insertNumArraySymbol(p->table, node->array.name, node->array.type,
-      0, NULL, node->array.isFixed);
-          }
-        }
+      case TOKEN_MODULO:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = (int)leftVal % (int)rightVal;
         break;
-      }
-      case NODE_ARRAY_ELEMENT_ASSIGN: {
-
-        SymbolTableEntry *var =
-            lookupSymbol(p->table, node->arrayElm.name, node->isParam);
-
-        if (!var) {
-          printEvalError(node->loc, "array %s is not decleared\n",
-                         node->arrayElm.name);
-          exit(EXIT_FAILURE);
-        }
-        if (!var->isArray) {
-          printEvalError(node->loc, " %s is not an array \n",
-      node->arrayElm.name); exit(EXIT_FAILURE);
-        }
-
-        Result *res = EvalAst(node->arrayElm.index, p);
-        double resIndex = *(double *)res->result;
-        int index = (int)resIndex;
-
-        if (var->isFixed) {
-          if (var->arraySize <= index) {
-            printEvalError(node->loc, "index out of bound canot access %d
-      index\n", node->array.arraySize); exit(EXIT_FAILURE);
-          }
-        } else {
-          if (var->arraySize <= index) {
-            if (!(index <= var->arraySize)) {
-              printEvalError(node->loc, "cannot access  index %dcn ", index);
-              exit(EXIT_FAILURE);
-            }
-            if (strcmp(var->type, "string") == 0) {
-
-              var->value = (char **)realloc(var->value,
-                                            sizeof(char *) * (var->arraySize +
-      1));
-
-            } else {
-              var->value = (double *)realloc(var->value,
-                                             sizeof(double) * (var->arraySize +
-      1));
-            }
-          }
-        }
-
-        free(res); // freeing the previous result of index
-
-        res = EvalAst(node->arrayElm.value, p);
-        char *type = getDataType(res);
-
-        if (strcmp(type, var->type) != 0) {
-          printEvalError(node->loc, "cannot assign type of %s to %s", type,
-                         var->type);
-          exit(EXIT_FAILURE);
-        }
-
-        if (strcmp(var->type, "string") == 0) {
-          if (!var->value) {
-            var->value = (char **)malloc(sizeof(char *) * var->arraySize);
-          }
-          ((char **)var->value)[index] = strdup((char *)res->result);
-          var->arraySize++;
-          free(res->result);
-          free(res);
-          break;
-        }
-
-        if (!var->value) {
-          var->value = (double *)malloc(sizeof(double) * var->arraySize);
-        }
-
-        ((double *)var->value)[index] = *(double *)res->result;
-        free(res);
-        var->arraySize++;
+      case TOKEN_MULTIPLY:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal * rightVal;
         break;
-      }
-
-      case NODE_BREAK: {
-        Result *res = newResult(NULL, NODE_BREAK, 0);
-        res->isBreak = 1;
-        return res;
-      }
-
-      case NODE_CONTNUE: {
-        Result *res = newResult(NULL, NODE_CONTNUE, 0);
-        res->isContinue = 1;
-        return res;
-      }
-
-      case NODE_WHILE_LOOP: {
-
-        // TODO: still some errors mainly continue one;
-        enterScope(p->table);
-        Result *result = EvalAst(node->whileLoop.condition, p);
-        double condition = 0;
-        if (result) { // Check if result is non-null
-          if (result->result) {
-            condition = *(double *)result->result;
-          }
-          free(result->result); // Free the dynamically allocated memory pointed
-      to
-                                // by result->result, if applicable
-          free(result);         // Free the Result structure itself
-        };
-
-        while (condition) {
-          Result *blockRes = EvalAst(node->whileLoop.body, p);
-
-          if (blockRes && blockRes->isReturn) {
-            return blockRes;
-          }
-
-          if (blockRes && blockRes->isContinue) {
-            freeResult(blockRes);
-            result = EvalAst(node->whileLoop.condition, p);
-            condition = *(double *)result->result;
-            free(result);
-            continue;
-          }
-
-          // Handle break: exit the loop
-          if (blockRes && blockRes->isBreak) {
-            freeResult(blockRes);
-            break;
-          }
-          freeResult(blockRes);
-          blockRes = EvalAst(node->whileLoop.condition, p);
-          condition = *(double *)blockRes->result;
-          freeResult(blockRes);
-        }
-        exitScope(p->table);
+      case TOKEN_DIVIDE:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal / rightVal;
         break;
-      }
-
-      case NODE_FOR_LOOP: {
-        enterScope(p->table);
-        // initialize the variable at first
-        EvalAst(node->loopFor.initializer, p);
-        Result *result = EvalAst(node->loopFor.condition, p);
-        double condition = *(double *)result->result;
-        while (condition) {
-          // evaluates the body
-          Result *blockRes = EvalAst(node->loopFor.loopBody, p);
-
-          if (blockRes && blockRes->isReturn) {
-            return blockRes;
-          }
-
-          // free  the result if result is valid and is not a type of return
-          if (blockRes && blockRes->isContinue) {
-            free(blockRes->result);
-            free(blockRes);
-            EvalAst(node->loopFor.icrDcr, p);
-            result = EvalAst(node->loopFor.condition, p);
-            condition = *(double *)result->result;
-            continue; // Skip the rest of the loop body
-          }
-
-          // Handle break: exit the loop
-          if (blockRes && blockRes->isBreak) {
-            free(blockRes->result);
-            free(blockRes);
-            exitScope(p->table);
-            break; // Exit the loop
-          }
-
-          if (blockRes) {
-            free(blockRes->result);
-            free(blockRes);
-          }
-
-          // handle the icrDcr statement
-          EvalAst(node->loopFor.icrDcr, p);
-          result = EvalAst(node->loopFor.condition, p);
-          condition = *(double *)result->result;
-        }
-        exitScope(p->table);
+      case TOKEN_DB_EQUAL:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal == rightVal;
         break;
-      }
-
+      case TOKEN_EQ_GREATER:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal >= rightVal;
+        break;
+      case TOKEN_EQ_LESSER:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal <= rightVal;
+        break;
+      case TOKEN_LESSER:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal < rightVal;
+        break;
+      case TOKEN_GREATER:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal > rightVal;
+        break;
+      case TOKEN_EQ_NOT:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = leftVal != rightVal;
+        break;
+      case TOKEN_AND:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = (leftVal && rightVal);
+        break;
+      case TOKEN_OR:
+        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
+        *(double *)(res->result) = (leftVal || rightVal);
+        break;
       default:
-        printEvalError(node->loc, "Error: Unexpected node type %s\n",
-                       nodeTypeNames[node->type]);
+        printEvalError(node->loc, "Error: Unknown binary operator\n");
         exit(EXIT_FAILURE);
       }
-      */
+
+      // Free the results used
+      free(left);
+      free(right);
+      return res;
+    } else if (left->NodeType == NODE_STRING_LITERAL &&
+               right->NodeType == NODE_STRING_LITERAL) {
+      char *leftStr = trimQuotes((char *)left->result);
+      char *rightStr = trimQuotes((char *)right->result);
+
+      size_t len1 = strlen(leftStr);
+      size_t len2 = strlen(rightStr);
+
+      char *concatenated = (char *)malloc(len1 + len2 + 1);
+      if (concatenated == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+      }
+
+      strcpy(concatenated, leftStr);
+      strcat(concatenated, rightStr);
+
+      freeResult(left);  // Assuming leftStr and rightStr were allocated
+      freeResult(right); // Assuming rightStr was allocated from
+
+      return newResult(concatenated, NODE_STRING_LITERAL, len1 + len2 + 1);
+    } else {
+      printEvalError(
+          node->loc, "Error: cannot do ( %s ) operations between %s and%s \n ",
+          tokenNames[node->binaryOp.op], getDataType(left), getDataType(right));
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  case NODE_UNARY_OP: {
+    Result *right = EvalAst(node->unaryOp.right, p);
+    if (right->NodeType == NODE_NUMBER) {
+      double rightVal = *(double *)(right->result);
+      switch (node->unaryOp.op) {
+      case TOKEN_NOT: {
+        Result *node =
+            newResult(&(double){!rightVal}, NODE_NUMBER, sizeof(double));
+        free(right->result);
+        free(right);
+        return node;
+      }
+      default:
+        printEvalError(node->loc, "Error: Unknown unary operator\n");
+        exit(EXIT_FAILURE);
+      }
+    } else {
+      printEvalError(node->loc, "Error: Invalid type for unary operation\n");
+      exit(EXIT_FAILURE);
+    }
+  }
+
+    /*
+              case NODE_IDENTIFIER_VALUE: {
+
+                SymbolTableEntry *var =
+                    lookupSymbol(p->table, node->identifier.name,
+       node->isParam);
+
+                if (!var) {
+                  printEvalError(node->loc, "%s is not decleared\n",
+              node->identifier.name); exit(EXIT_FAILURE);
+                }
+
+                if (strcmp(var->type, "string") == 0) {
+                  return newResult((char *)var->value, NODE_STRING_LITERAL,
+                                   sizeof(var->value));
+                }
+                return newResult(var->value, NODE_NUMBER, sizeof(var->value));
+              }
+
+
+*/
+  case NODE_IDENTIFIER_MUTATION: {
+    SymbolTableEntry *var =
+        lookupSymbol(p->ctx, node->identifier.name, SYMBOL_KIND_VARIABLES);
+    if (!var) {
+      printEvalError(node->loc, "%s is not decleared\n", node->identifier.name);
+      exit(EXIT_FAILURE);
+    }
+
+    Result *res = EvalAst(node->identifier.value, p);
+    char *type = getDataType(res);
+
+    if (strcmp(type, var->type) != 0) {
+      printEvalError(node->loc, "cannot assign type of %s to type of %s", type,
+                     var->type);
+      free(res->result);
+      free(res);
+      exit(EXIT_FAILURE);
+    }
+
+    SymbolError err = updateSymbolTableValue(var, res);
+    if (err != SYMBOL_ERROR_NONE) {
+      printSymbolError(err, node->loc, node->identifier.name,
+                       node->identifier.type);
+      exit(EXIT_FAILURE);
+    }
+    break;
+  }
+
+  case NODE_IDENTIFIER_ASSIGNMENT: {
+
+    SymbolTableEntry *var =
+        lookupSymbol(p->ctx, node->identifier.name, SYMBOL_KIND_VARIABLES);
+
+    if (var) {
+      printEvalError(node->loc, "cannot redeclare %s\n", node->identifier.name);
+      exit(EXIT_FAILURE);
+    }
+
+    Result *res = EvalAst(node->identifier.value, p);
+
+    char *inferedDataType = getDataType(res);
+
+    if (strcmp(node->identifier.type, inferedDataType) != 0) {
+      printEvalError(node->loc, "cannot assign typeof %s to %s\n",
+                     inferedDataType, node->identifier.type);
+      free(res->result);
+      free(res);
+      exit(EXIT_FAILURE);
+    }
+
+    SymbolError err =
+        insertSymbol(p->ctx, node->identifier.type, node->identifier.name, res,
+                     SYMBOL_KIND_VARIABLES);
+    if (err != SYMBOL_ERROR_NONE) {
+      printf("%s\n", errorName[err]);
+      printSymbolError(err, node->loc, node->identifier.name, inferedDataType);
+    }
+    break;
+  }
+
+  case NODE_IDENTIFIER_DECLERATION: {
+    SymbolTableEntry *var =
+        lookupSymbol(p->ctx, node->identifier.name, SYMBOL_KIND_VARIABLES);
+    if (var) {
+      printEvalError(node->loc,
+                     "cannot redeclare variable %s is already decleared\n",
+                     node->identifier.name);
+      exit(EXIT_FAILURE);
+    }
+
+    SymbolError err =
+        insertSymbol(p->ctx, node->identifier.type, node->identifier.name, NULL,
+                     SYMBOL_KIND_VARIABLES);
+
+    if (err != SYMBOL_ERROR_NONE) {
+      printSymbolError(err, node->loc, node->identifier.name,
+                       node->identifier.type);
+      exit(EXIT_FAILURE);
+    }
+
+    break;
+  }
+
+  case NODE_STRING_LITERAL: {
+    char *str = strdup(node->stringLiteral.value);
+    Result *res = newResult(str, NODE_STRING_LITERAL, strlen(str) + 1);
+    free(str);
+    return res;
+  }
+    /*
+
+  case NODE_BLOCK: {
+    enterScope(p->table);
+    for (int i = 0; i < node->block.statementCount; i++) {
+      AstNode *ast = node->block.statements[i];
+      Result *result = EvalAst(ast, p);
+      if (result && (result->isReturn || result->isBreak)) {
+        exitScope(p->table);
+        return result;
+      } else if (result && ast->type == NODE_FUNCTION_READ_IN) {
+        // pending
+        return result;
+      }
+    };
+
+    exitScope(p->table);
+    return NULL;
+  }
+
+  case NODE_IF_ELSE: {
+    Result *conditionResult = EvalAst(node->ifElseBlock.condition, p);
+    if (conditionResult->NodeType != NODE_NUMBER) {
+      printEvalError(
+          node->loc,
+          "Error: Condition in if-else must be a number (interpreted as "
+          "boolean)\n");
+      exit(EXIT_FAILURE);
+    }
+
+    double conditionValue = *(double *)(conditionResult->result);
+
+    freeResult(conditionResult);
+
+    if (conditionValue) {
+      Result *val = EvalAst(node->ifElseBlock.ifBlock, p);
+      if (val) {
+        return val;
+      }
+    } else if (node->ifElseBlock.elseBlock != NULL) {
+      Result *val = EvalAst(node->ifElseBlock.elseBlock, p);
+      if (val) {
+        return val;
+      }
+    }
+    break;
+  }
+
+  case NODE_FUNCTION_READ_IN: {
+    int initialBufferSize = 100;
+    int currentBufferSize = 0;
+
+    char *buffer = (char *)malloc(sizeof(char) * initialBufferSize);
+    if (buffer == NULL) {
+      perror("Failed to allocate memory for buffer");
+      exit(EXIT_FAILURE);
+    }
+
+    while (1) {
+      if (currentBufferSize >= initialBufferSize - 1) {
+        initialBufferSize += 100;
+        char *newBuffer =
+            (char *)realloc(buffer, sizeof(char) * initialBufferSize);
+        if (newBuffer == NULL) {
+          perror("Failed to reallocate memory");
+          free(buffer); // Free original buffer before exiting
+          exit(EXIT_FAILURE);
+        }
+        buffer = newBuffer;
+      }
+
+      char ch = getchar();
+      if (ch == '\n') {
+        break;
+      }
+      buffer[currentBufferSize] = ch;
+      currentBufferSize++;
+    }
+
+    buffer[currentBufferSize] = '\0';
+
+    Result *res = NULL;
+
+    if (strcmp(node->read.type, "string") == 0) {
+      res = newResult(buffer, NODE_STRING_LITERAL,
+                      currentBufferSize + 1); // Include null terminator
+    } else if (strcmp(node->read.type, "number") == 0) {
+      double numberValue;
+      sscanf(buffer, "%lf", &numberValue);
+
+      double *ptr = (double *)malloc(sizeof(double));
+      if (ptr == NULL) {
+        perror("Failed to allocate memory for number");
+        free(buffer); // Free buffer before exiting
+        exit(EXIT_FAILURE);
+      }
+      *ptr = numberValue;
+      res = newResult((void *)ptr, NODE_NUMBER, sizeof(double));
+    }
+
+    free(buffer);
+    return res;
+  }
+
+  case NODE_FUNCTION_PRINT: {
+
+    for (int i = 0; i < node->print.statementCount; i++) {
+
+      char *name = node->print.statments[i]->array.name;
+      SymbolTableEntry *entry = lookupSymbol(p->table, name, 0);
+      if (entry && entry->isArray) {
+        printf(GREEN "[" RESET);
+        for (int j = 0; j < entry->arraySize; j++) {
+          if (strcmp(entry->type, "string") == 0) {
+            // Check if the string array element exists
+            if (entry->value && ((char **)entry->value)[j]) {
+              printf(YELLOW " %s " RESET, ((char **)entry->value)[j]);
+            }
+          } else {
+            // Check if the integer array element exists
+            if (entry->value && ((double *)entry->value)[j]) {
+              printf(BLUE " %.0lf " RESET, ((double *)entry->value)[j]);
+            }
+          }
+          if (j < entry->arraySize - 1) {
+            printf(MAGENTA "," RESET);
+          }
+        }
+        printf(GREEN "]\n" RESET);
+      } else if (entry && entry->isFn) {
+              printEvalError(node->loc, "cannot call function directly from
+        println"); exit(EXIT_FAILURE); } else { Result *res =
+        EvalAst(node->print.statments[i], p); if (res) {
+          if (res->NodeType == NODE_STRING_LITERAL) {
+            printf(YELLOW "%s" RESET, trimQuotes((char *)res->result));
+          } else {
+            printf(BLUE "%lf" RESET, *(double *)res->result);
+          }
+          freeResult(res);
+              } else {
+          printf(RED "(NULL) RESET\n");
+              }
+      }
+    }
+    printf("\n");
+    break;
+  }
+
+  case NODE_ARRAY_ELEMENT_ACCESS: {
+    SymbolTableEntry *var =
+        lookupSymbol(p->table, node->arrayElm.name, node->isParam);
+
+    if (!var || !var->isArray) {
+      printEvalError(node->loc, " %s is not decleared\n",
+node->arrayElm.name); exit(EXIT_FAILURE);
+    }
+    Result *res = EvalAst(node->arrayElm.index, p);
+    if (!res) {
+      printEvalError(node->loc, "invalid index");
+      exit(EXIT_FAILURE);
+    }
+    double idx = *(double *)res->result;
+    int index = (int)idx;
+    free(res);
+    if (index >= var->arraySize) {
+      printEvalError(node->loc, "index out of bound");
+      exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(var->type, "string") == 0) {
+      char *value = ((char **)var->value)[index];
+      return newResult(value, NODE_STRING_LITERAL, 0);
+    } else {
+      double value = ((double *)var->value)[index];
+      return newResult(&value, NODE_NUMBER, 0);
+    }
+  }
+
+    // needs refactoring
+  case NODE_ARRAY_INIT: {
+    SymbolTableEntry *var =
+        lookupSymbol(p->table, node->array.name, node->isParam);
+
+    if (var) {
+            printEvalError(node->loc, "cannot redeclare %s is already
+        decleared\n", node->array.name); exit(EXIT_FAILURE);
+    }
+
+    if (node->array.isFixed) {
+      handleFixedArrayInsert(node, p);
+    } else {
+      handleDynamicArrayInsert(node, p);
+    }
+    break;
+  }
+
+  case NODE_ARRAY_DECLARATION: {
+    SymbolTableEntry *var =
+        lookupSymbol(p->table, node->array.name, node->isParam);
+
+    if (var) {
+            printEvalError(node->loc, "cannot redeclare  %s is already
+        decleared\n", node->identifier.name); exit(EXIT_FAILURE);
+    }
+
+    if (node->array.arraySize) {
+      Result *result = EvalAst(node->array.arraySize, p);
+      double size = *(double *)result->result;
+      if (strcmp(node->array.type, "string") == 0) {
+        insertStrArraySymbol(p->table, node->array.name, node->array.type,
+size, NULL, node->array.isFixed, node->array.actualSize); } else {
+        insertNumArraySymbol(p->table, node->array.name, node->array.type,
+size, NULL, node->array.isFixed);
+      }
+    } else {
+      if (strcmp(node->array.type, "string") == 0) {
+        insertStrArraySymbol(p->table, node->array.name, node->array.type, 0,
+                             NULL, node->array.isFixed,
+node->array.actualSize); } else { insertNumArraySymbol(p->table,
+node->array.name, node->array.type, 0, NULL, node->array.isFixed);
+      }
+    }
+    break;
+  }
+  case NODE_ARRAY_ELEMENT_ASSIGN: {
+
+    SymbolTableEntry *var =
+        lookupSymbol(p->table, node->arrayElm.name, node->isParam);
+
+    if (!var) {
+      printEvalError(node->loc, "array %s is not decleared\n",
+                     node->arrayElm.name);
+      exit(EXIT_FAILURE);
+    }
+    if (!var->isArray) {
+      printEvalError(node->loc, " %s is not an array \n",
+node->arrayElm.name); exit(EXIT_FAILURE);
+    }
+
+    Result *res = EvalAst(node->arrayElm.index, p);
+    double resIndex = *(double *)res->result;
+    int index = (int)resIndex;
+
+    if (var->isFixed) {
+      if (var->arraySize <= index) {
+              printEvalError(node->loc, "index out of bound canot access %d
+        index\n", node->array.arraySize); exit(EXIT_FAILURE);
+      }
+    } else {
+      if (var->arraySize <= index) {
+        if (!(index <= var->arraySize)) {
+          printEvalError(node->loc, "cannot access  index %dcn ", index);
+          exit(EXIT_FAILURE);
+        }
+        if (strcmp(var->type, "string") == 0) {
+
+          var->value =
+              (char **)realloc(var->value, sizeof(char *) * (var->arraySize +
+  1));
+
+        } else {
+          var->value = (double *)realloc(var->value,
+                                         sizeof(double) * (var->arraySize +
+1));
+        }
+      }
+    }
+
+    free(res); // freeing the previous result of index
+
+    res = EvalAst(node->arrayElm.value, p);
+    char *type = getDataType(res);
+
+    if (strcmp(type, var->type) != 0) {
+      printEvalError(node->loc, "cannot assign type of %s to %s", type,
+                     var->type);
+      exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(var->type, "string") == 0) {
+      if (!var->value) {
+        var->value = (char **)malloc(sizeof(char *) * var->arraySize);
+      }
+      ((char **)var->value)[index] = strdup((char *)res->result);
+      var->arraySize++;
+      free(res->result);
+      free(res);
+      break;
+    }
+
+    if (!var->value) {
+      var->value = (double *)malloc(sizeof(double) * var->arraySize);
+    }
+
+    ((double *)var->value)[index] = *(double *)res->result;
+    free(res);
+    var->arraySize++;
+    break;
+  }
+
+  case NODE_BREAK: {
+    Result *res = newResult(NULL, NODE_BREAK, 0);
+    res->isBreak = 1;
+    return res;
+  }
+
+  case NODE_CONTNUE: {
+    Result *res = newResult(NULL, NODE_CONTNUE, 0);
+    res->isContinue = 1;
+    return res;
+  }
+
+  case NODE_WHILE_LOOP: {
+
+    // TODO: still some errors mainly continue one;
+
+    enterScope(p->table);
+    Result *result = EvalAst(node->whileLoop.condition, p);
+    double condition = 0;
+    if (result) { // Check if result is non-null
+      if (result->result) {
+        condition = *(double *)result->result;
+      }
+      free(result->result); // Free the dynamically allocated memory pointed
+      to
+          // by result->result, if applicable
+          free(result); // Free the Result structure itself
+    };
+
+    while (condition) {
+      Result *blockRes = EvalAst(node->whileLoop.body, p);
+
+      if (blockRes && blockRes->isReturn) {
+        return blockRes;
+      }
+
+      if (blockRes && blockRes->isContinue) {
+        freeResult(blockRes);
+        result = EvalAst(node->whileLoop.condition, p);
+        condition = *(double *)result->result;
+        free(result);
+        continue;
+      }
+
+      // Handle break: exit the loop
+      if (blockRes && blockRes->isBreak) {
+        freeResult(blockRes);
+        break;
+      }
+      freeResult(blockRes);
+      blockRes = EvalAst(node->whileLoop.condition, p);
+      condition = *(double *)blockRes->result;
+      freeResult(blockRes);
+    }
+    exitScope(p->table);
+    break;
+  }
+
+  case NODE_FOR_LOOP: {
+    enterScope(p->table);
+    // initialize the variable at first
+    EvalAst(node->loopFor.initializer, p);
+    Result *result = EvalAst(node->loopFor.condition, p);
+    double condition = *(double *)result->result;
+    while (condition) {
+      // evaluates the body
+      Result *blockRes = EvalAst(node->loopFor.loopBody, p);
+
+      if (blockRes && blockRes->isReturn) {
+        return blockRes;
+      }
+
+      // free  the result if result is valid and is not a type of return
+      if (blockRes && blockRes->isContinue) {
+        free(blockRes->result);
+        free(blockRes);
+        EvalAst(node->loopFor.icrDcr, p);
+        result = EvalAst(node->loopFor.condition, p);
+        condition = *(double *)result->result;
+        continue; // Skip the rest of the loop body
+      }
+
+      // Handle break: exit the loop
+      if (blockRes && blockRes->isBreak) {
+        free(blockRes->result);
+        free(blockRes);
+        exitScope(p->table);
+        break; // Exit the loop
+      }
+
+      if (blockRes) {
+        free(blockRes->result);
+        free(blockRes);
+      }
+
+      // handle the icrDcr statement
+      EvalAst(node->loopFor.icrDcr, p);
+      result = EvalAst(node->loopFor.condition, p);
+      condition = *(double *)result->result;
+    }
+    exitScope(p->table);
+    break;
+  }
+*/
+  default:
+    printEvalError(node->loc, "Error: Unexpected node type %s\n",
+                   nodeTypeNames[node->type]);
+    exit(EXIT_FAILURE);
+  }
 
   return NULL; // Ensure you return a valid pointer
 }
@@ -1263,9 +1293,10 @@ AstNode *parseAst(Parser *p) {
   return NULL;
 }
 
+/*
 void freeSymbolTable(SymbolTable *table) {
   if (table) {
-    /*
+
     for (int i = 0; i < table->size; i++) {
       SymbolTableEntry *entry = &table->entries[i];
 
@@ -1299,7 +1330,9 @@ void freeSymbolTable(SymbolTable *table) {
     }
     free(table->entries);
     free(table);
-
-  */
   }
 }
+}
+return NULL;
+}
+*/

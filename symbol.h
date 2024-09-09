@@ -33,4 +33,11 @@ SymbolError insertFunctionSymbol(SymbolContext *ctx, char *name, char *type,
                                  SymbolKind kind, AstNode *body, int level);
 SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
                                SymbolKind kind);
+
+SymbolError insertSymbol(SymbolContext *ctx, char *type, char *name,
+                         Result *value, SymbolKind kind);
+
+SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value);
+
+SymbolContext *createSymbolContext(int capacity);
 #endif // SYMBOL_H_

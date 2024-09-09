@@ -84,25 +84,36 @@ int main(int argc, char **argv) {
   // reading the file content into string
   fread(file_content, sizeof(char), file_size, fp);
   file_content[file_size] = '\0';
+
   Lexer *lex = InitLexer(file_content, file_name);
 
-  SymbolTable *table = createSymbolTable(100);
-  Parser *p = InitParser(lex, table);
-  Program *prog = (Program *)malloc(sizeof(Program));
+  SymbolContext *ctx = createSymbolContext(100);
+
+  Parser *p = InitParser(lex, ctx);
+
+  /*
+  Program *prog = (Program *)(sizeof(Program));
+
+  if (prog == NULL) {
+    printf("buy more ram\n");
+    exit(EXIT_FAILURE);
+  }
+
   prog->size = 0;
   prog->capacity = 10;
   prog->program = (AstNode **)malloc(sizeof(AstNode) * prog->capacity);
-
+*/
   while (p->current->type != TOKEN_EOF) {
 
     AstNode *ast = parseAst(p);
     if (ast) {
-      addToProgram(ast, prog);
+      EvalAst(ast, p);
     }
   }
 
+  /*
   for (int i = 0; i < prog->size; i++) {
-    /* Result *res = EvalAst(prog->program[i], p);
+    Result *res = EvalAst(prog->program[i], p);
      if (res != NULL) {
        if (res->result != NULL) {
          if (res->NodeType == NODE_STRING_LITERAL) {
@@ -110,9 +121,9 @@ int main(int argc, char **argv) {
          }
        }
        free(res);
-     }*/
+     }
   }
-
+*/
   for (int i = 0; i < p->size; i++) {
     freeTokens(p->tokens[i]);
   }
@@ -121,12 +132,6 @@ int main(int argc, char **argv) {
   free(p->lex->source);
   free(p->lex->filename);
   free(p->lex);
-  for (int i = 0; i < prog->size; i++) {
-    freeAst(prog->program[i]);
-  }
-  freeSymbolTable(p->table);
-  free(prog->program);
-  free(prog);
   free(p);
   fclose(fp);
   free(file_content);

@@ -71,8 +71,9 @@ typedef struct {
   Token **tokens;
   int idx;
   int size;
+  int level;
 
-  SymbolTable *table;
+  SymbolContext *ctx;
 } Parser;
 struct AstNode {
   int type;

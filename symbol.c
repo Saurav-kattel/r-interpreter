@@ -17,6 +17,26 @@ char *inferTypeFromResult(Result *res) {
   return "nan";
 }
 
+SymbolContext *createSymbolContext(int capacity) {
+  SymbolContext *ctx = (SymbolContext *)malloc(sizeof(*ctx));
+
+  // Initialize global table
+  ctx->globalTable = (SymbolTable *)malloc(sizeof(SymbolTable));
+  ctx->globalTable->capacity = capacity;
+  ctx->globalTable->size = 0;
+  ctx->globalTable->entries = (SymbolTableEntry **)malloc(
+      sizeof(SymbolTableEntry *) * ctx->globalTable->capacity);
+
+  // Initialize the stack
+  ctx->stack = (Stack *)malloc(sizeof(Stack));
+  ctx->stack->capacity = capacity;
+  ctx->stack->frameCount = 0;
+  ctx->stack->frames =
+      (StackFrame **)malloc(sizeof(StackFrame *) * ctx->stack->capacity);
+
+  return ctx;
+}
+
 SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
                                    SymbolKind kind) {
   for (int j = 0; j < scope->size; j++) {
@@ -91,12 +111,18 @@ SymbolError insertGlobalSymbol(SymbolContext *ctx, char *type, char *name,
   ctx->globalTable->entries[size]->symbol = strdup(name);
   ctx->globalTable->entries[size]->type = strdup(type);
   ctx->globalTable->entries[size]->isGlobal = 1;
+
+  if (value == NULL) {
+    ctx->globalTable->entries[size]->value = NULL;
+    ctx->globalTable->size++;
+    return SYMBOL_ERROR_NONE;
+  }
+
   char *inferredType = inferTypeFromResult(value);
 
   if (strcmp(inferredType, type) != 0) {
     return SYMBOL_TYPE_ERROR;
   }
-
   if (strcmp(type, "string") == 0) {
     ctx->globalTable->entries[size]->value = strdup((char *)value->result);
     free(value->result);
@@ -213,6 +239,7 @@ SymbolError insertFunctionSymbol(SymbolContext *ctx, char *name, char *type,
                                  SymbolKind kind, AstNode *body, int level) {
 
   SymbolTableEntry *entry = lookupSymbol(ctx, name, kind);
+
   if (entry) {
     return SYMBOL_DUPLICATE_ERROR;
   }
@@ -227,5 +254,32 @@ SymbolError insertFunctionSymbol(SymbolContext *ctx, char *name, char *type,
     return status;
   }
 
+  return SYMBOL_ERROR_NONE;
+}
+
+SymbolError insertSymbol(SymbolContext *ctx, char *type, char *name,
+                         Result *value, SymbolKind kind) {
+
+  return insertGlobalSymbol(ctx, type, name, value, kind);
+}
+
+SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value) {
+
+  switch (value->NodeType) {
+  case NODE_STRING_LITERAL: {
+    if (strcmp(entry->type, "string") != 0) {
+      return SYMBOL_TYPE_ERROR;
+    }
+    entry->value = strdup((char *)value->result);
+    break;
+  }
+  case NODE_NUMBER: {
+    if (strcmp(entry->type, "number") != 0) {
+      return SYMBOL_TYPE_ERROR;
+    }
+    entry->value = (double *)value->result;
+    break;
+  }
+  }
   return SYMBOL_ERROR_NONE;
 }
