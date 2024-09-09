@@ -102,15 +102,15 @@ int main(int argc, char **argv) {
   }
 
   for (int i = 0; i < prog->size; i++) {
-    Result *res = EvalAst(prog->program[i], p);
-    if (res != NULL) {
-      if (res->result != NULL) {
-        if (res->NodeType == NODE_STRING_LITERAL) {
-          free(res->result);
-        }
-      }
-      free(res);
-    }
+    /* Result *res = EvalAst(prog->program[i], p);
+     if (res != NULL) {
+       if (res->result != NULL) {
+         if (res->NodeType == NODE_STRING_LITERAL) {
+           free(res->result);
+         }
+       }
+       free(res);
+     }*/
   }
 
   for (int i = 0; i < p->size; i++) {
