@@ -37,6 +37,70 @@ SymbolContext *createSymbolContext(int capacity) {
   return ctx;
 }
 
+void exitScope(SymbolContext *ctx) {
+  StackFrame *frame = ctx->stack->frames[ctx->stack->frameCount - 1];
+  if (!frame) {
+    return;
+  }
+  SymbolTable *table = frame->localTable;
+  if (!table) {
+    return;
+  }
+  for (int i = 0; i < table->size; i++) {
+    SymbolTableEntry *entry = table->entries[i];
+    if (!entry) {
+      continue;
+    }
+
+    free(entry->symbol);
+
+    if (entry->isArray) {
+      if (strcmp(entry->type, "string") == 0) {
+        for (int j = 0; j < entry->arraySize; j++) {
+          if (!((char **)entry->value)[j]) {
+            continue;
+          }
+          free(((char **)entry->value)[j]);
+        }
+        continue;
+      }
+      free(entry->value);
+      continue;
+    }
+    if (strcmp(entry->type, "string") == 0) {
+      free(entry->value);
+    }
+    free(entry->type);
+
+    if (entry->isFn) {
+      // TODO: free functions
+    }
+  }
+  ctx->stack->frameCount--;
+}
+
+void enterScope(SymbolContext *ctx) {
+  int frameCount = ctx->stack->frameCount;
+  int capacity = ctx->stack->capacity;
+
+  // Check if we need to increase the capacity of the stack
+  if (capacity <= frameCount) {
+    ctx->stack->capacity *= 2;
+    ctx->stack->frames = realloc(ctx->stack->frames,
+                                 sizeof(StackFrame *) * ctx->stack->capacity);
+    if (!ctx->stack->frames) {
+      // handle memory error
+    }
+  }
+
+  // Create a new stack frame for the new scope
+  ctx->stack->frames[frameCount] = calloc(1, sizeof(StackFrame));
+  ctx->stack->frames[frameCount]->localTable = calloc(1, sizeof(SymbolTable));
+
+  // Increment frame count since we've entered a new scope
+  ctx->stack->frameCount++;
+}
+
 SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
                                    SymbolKind kind) {
   for (int j = 0; j < scope->size; j++) {
@@ -126,6 +190,96 @@ SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
   return lookupGlobalScope(context->globalTable, name, kind);
 }
 
+SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
+                              Result *value, SymbolKind kind, int level) {
+
+  // Check if the symbol already exists
+  SymbolTableEntry *entry = lookupSymbol(ctx, name, kind);
+  if (entry) {
+    return SYMBOL_DUPLICATE_ERROR;
+  }
+
+  int currentFrame = ctx->stack->frameCount - 1;
+
+  // Ensure the current frame is valid
+  if (currentFrame < 0) {
+    return SYMBOL_NOT_FOUND_ERROR;
+  }
+
+  StackFrame *frame = ctx->stack->frames[currentFrame];
+
+  // Ensure the local table is initialized for the current frame
+  if (frame->localTable == NULL) {
+    frame->localTable = calloc(1, sizeof(SymbolTable));
+    if (!frame->localTable) {
+      return SYMBOL_MEM_ERROR;
+    }
+    // Initialize capacity
+    frame->localTable->capacity = 4; // Starting with a small capacity
+    frame->localTable->entries =
+        malloc(sizeof(SymbolTableEntry *) * frame->localTable->capacity);
+    if (!frame->localTable->entries) {
+      return SYMBOL_MEM_ERROR;
+    }
+  }
+
+  SymbolTable *locTable = frame->localTable;
+
+  // If the frame's level is less than the current level, update the level
+  // (i.e., entering a deeper scope)
+  if (frame->stackLevel < level) {
+    frame->stackLevel = level;
+  }
+
+  // Handle reallocation of the local table's entries if necessary
+  if (locTable->size >= locTable->capacity) {
+    locTable->capacity *= 2;
+    locTable->entries = realloc(locTable->entries, sizeof(SymbolTableEntry *) *
+                                                       locTable->capacity);
+    if (!locTable->entries) {
+      return SYMBOL_MEM_ERROR;
+    }
+  }
+
+  // Allocate and initialize the new symbol table entry
+  locTable->entries[locTable->size] = malloc(sizeof(SymbolTableEntry));
+  if (!locTable->entries[locTable->size]) {
+    return SYMBOL_MEM_ERROR;
+  }
+
+  // Copy the symbol and type
+  locTable->entries[locTable->size]->type = strdup(type);
+  locTable->entries[locTable->size]->symbol = strdup(name);
+  locTable->entries[locTable->size]->isGlobal = 0;
+
+  // Handle the case where the value is NULL (e.g., uninitialized variables)
+  if (value == NULL) {
+    locTable->entries[locTable->size]->value = NULL;
+    locTable->size++;
+    return SYMBOL_ERROR_NONE;
+  }
+
+  // Infer the type and check for type mismatch
+  char *inferredType = inferTypeFromResult(value);
+  if (strcmp(inferredType, type) != 0) {
+    return SYMBOL_TYPE_ERROR;
+  }
+
+  // Handle value assignment based on type
+  if (strcmp(type, "string") == 0) {
+    locTable->entries[locTable->size]->value = strdup((char *)value->result);
+    free(value->result); // Free the result as the value is now copied
+    free(value);         // Free the Result structure
+  } else if (strcmp(type, "number") == 0) {
+    locTable->entries[locTable->size]->value = (double *)value->result;
+    free(value); // Free the Result structure
+  }
+
+  // Increment the size of the local table
+  locTable->size++;
+
+  return SYMBOL_ERROR_NONE;
+}
 // entires the entry in global scope
 SymbolError insertGlobalSymbol(SymbolContext *ctx, char *type, char *name,
                                Result *value, SymbolKind kind) {
@@ -297,10 +451,11 @@ SymbolError insertFunctionSymbol(SymbolContext *ctx, char *name, char *type,
   return SYMBOL_ERROR_NONE;
 }
 
-// TODO: local scope symbol entry not implemented
 SymbolError insertSymbol(SymbolContext *ctx, char *type, char *name,
-                         Result *value, SymbolKind kind) {
-
+                         Result *value, SymbolKind kind, int level) {
+  if (level > 0) {
+    return insertLocalSymbol(ctx, type, name, value, kind, level);
+  }
   return insertGlobalSymbol(ctx, type, name, value, kind);
 }
 

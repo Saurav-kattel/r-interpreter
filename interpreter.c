@@ -48,18 +48,18 @@ void printSymbolError(SymbolError err, Loc loc, char *name, char *type) {
   switch (err) {
   case SYMBOL_MEM_ERROR:
     printEvalError(loc, "failed allocating memory");
-    break;
+    exit(EXIT_FAILURE);
   case SYMBOL_TYPE_ERROR:
     printEvalError(loc, "TypeError: cannot assign type of %s", type);
-    break;
+    exit(EXIT_FAILURE);
   case SYMBOL_DUPLICATE_ERROR:
     printEvalError(loc, "ReferenceError: %s is already declared\n", name);
-    break;
+    exit(EXIT_FAILURE);
   case SYMBOL_NOT_FOUND_ERROR:
     printEvalError(loc, "ReferenceError: %s is not declared", name);
-    break;
+    exit(EXIT_FAILURE);
   case SYMBOL_ERROR_NONE:
-    break;
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -606,7 +606,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
     SymbolError err =
         insertSymbol(p->ctx, node->identifier.type, node->identifier.name, res,
-                     SYMBOL_KIND_VARIABLES);
+                     SYMBOL_KIND_VARIABLES, p->level);
     if (err != SYMBOL_ERROR_NONE) {
       printf("%s\n", errorName[err]);
       printSymbolError(err, node->loc, node->identifier.name, inferedDataType);
@@ -626,7 +626,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
     SymbolError err =
         insertSymbol(p->ctx, node->identifier.type, node->identifier.name, NULL,
-                     SYMBOL_KIND_VARIABLES);
+                     SYMBOL_KIND_VARIABLES, p->level);
 
     if (err != SYMBOL_ERROR_NONE) {
       printSymbolError(err, node->loc, node->identifier.name,
@@ -643,23 +643,24 @@ Result *EvalAst(AstNode *node, Parser *p) {
     free(str);
     return res;
   }
-    /*
 
   case NODE_BLOCK: {
-    enterScope(p->table);
+    p->level++;
+    enterScope(p->ctx);
     for (int i = 0; i < node->block.statementCount; i++) {
       AstNode *ast = node->block.statements[i];
       Result *result = EvalAst(ast, p);
       if (result && (result->isReturn || result->isBreak)) {
-        exitScope(p->table);
+        p->level--;
         return result;
       } else if (result && ast->type == NODE_FUNCTION_READ_IN) {
         // pending
         return result;
       }
     };
+    exitScope(p->ctx);
+    p->level--;
 
-    exitScope(p->table);
     return NULL;
   }
 
@@ -691,7 +692,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
     break;
   }
 
-*/
   case NODE_FUNCTION_READ_IN: {
     int initialBufferSize = 100;
     int currentBufferSize = 0;
@@ -865,19 +865,17 @@ Result *EvalAst(AstNode *node, Parser *p) {
       Result *result = EvalAst(node->array.arraySize, p);
       double size = *(double *)result->result;
       if (strcmp(node->array.type, "string") == 0) {
-        insertStrArraySymbol(p->table, node->array.name, node->array.type, size,
-                             NULL, node->array.isFixed, node->array.actualSize);
-      } else {
-        insertNumArraySymbol(p->table, node->array.name, node->array.type, size,
-                             NULL, node->array.isFixed);
+        insertStrArraySymbol(p->table, node->array.name, node->array.type,
+  size, NULL, node->array.isFixed, node->array.actualSize); } else {
+        insertNumArraySymbol(p->table, node->array.name, node->array.type,
+  size, NULL, node->array.isFixed);
       }
     } else {
       if (strcmp(node->array.type, "string") == 0) {
-        insertStrArraySymbol(p->table, node->array.name, node->array.type, 0,
-                             NULL, node->array.isFixed, node->array.actualSize);
-      } else {
-        insertNumArraySymbol(p->table, node->array.name, node->array.type, 0,
-                             NULL, node->array.isFixed);
+        insertStrArraySymbol(p->table, node->array.name, node->array.type,
+  0, NULL, node->array.isFixed, node->array.actualSize); } else {
+        insertNumArraySymbol(p->table, node->array.name, node->array.type,
+  0, NULL, node->array.isFixed);
       }
     }
     break;
