@@ -8,7 +8,6 @@
 
 typedef enum SymbolKind {
   SYMBOL_KIND_FUNCTION,
-  SYMBOL_KIND_ARRAYS,
   SYMBOL_KIND_VARIABLES,
 } SymbolKind;
 
@@ -36,7 +35,8 @@ SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
 
 SymbolError insertSymbol(SymbolContext *ctx, char *type, char *name,
                          Result *value, SymbolKind kind);
-
+SymbolError insertArray(SymbolContext *ctx, char *name, char *type, int size,
+                        void *values, int isFixed);
 SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value);
 
 SymbolContext *createSymbolContext(int capacity);
