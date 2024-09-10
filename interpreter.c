@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define MAX_STRING_LENGTH 255
 
@@ -15,8 +16,6 @@ void printEvalError(Loc loc, const char *s, ...) {
 
   va_list args;
   va_start(args, s);
-
-  // Get the location from the token
 
   // Print the filename and line number with color
   printf(MAGENTA "%s" RESET, loc.file_name);
@@ -85,8 +84,8 @@ void freeResult(Result *res) {
   }
 }
 
-void insertFixedStringArray(AstNode *node, Parser *p, int *size) {
-  char *values[node->array.actualSize];
+void insertFixedStringArray(AstNode *node, Parser *p, int size) {
+  char **values = (char **)malloc(sizeof(char *) * size);
 
   for (int i = 0; i < node->array.actualSize; i++) {
     if (node->array.elements[i]) {
@@ -97,33 +96,28 @@ void insertFixedStringArray(AstNode *node, Parser *p, int *size) {
   }
 
   SymbolError err = insertArray(p->ctx, node->array.name, node->array.type,
-                                *size, values, node->array.isFixed);
+                                size, values, node->array.isFixed);
+
   if (err != SYMBOL_ERROR_NONE) {
     printSymbolError(err, node->loc, node->array.name, node->array.type);
     exit(EXIT_FAILURE);
   }
-
-  int loopSize = (*size);
-  for (int i = 0; i < node->array.actualSize; i++) {
-    if (values[i]) {
-      free(values[i]);
-    }
-  }
 }
 
-void insertFixedNumberArray(AstNode *node, Parser *p, int *size) {
-  double values[node->array.actualSize];
-  for (int i = 0; i < node->array.actualSize; i++) {
+void insertFixedNumberArray(AstNode *node, Parser *p, int size) {
+  double *values = (double *)malloc(sizeof(double) * (size));
+  for (int i = 0; i < size; i++) {
     if (node->array.elements[i]) {
       Result *res = EvalAst(node->array.elements[i], p);
-
       values[i] = *(double *)res->result;
-      free(res);
+      if (res) {
+        free(res);
+      }
     }
   }
 
   SymbolError err = insertArray(p->ctx, node->array.name, node->array.type,
-                                *size, values, node->array.isFixed);
+                                size, values, node->array.isFixed);
   if (err != SYMBOL_ERROR_NONE) {
     printSymbolError(err, node->loc, node->array.name, node->array.type);
     exit(EXIT_FAILURE);
@@ -134,12 +128,12 @@ void handleFixedArrayInsert(AstNode *node, Parser *p) {
 
   Result *res = EvalAst(node->array.arraySize, p);
   double arraySize = *(double *)res->result;
-  int size = (int)arraySize;
 
+  int size = (int)arraySize;
   if (strcmp(node->array.type, "string") == 0) {
-    insertFixedStringArray(node, p, &size);
+    insertFixedStringArray(node, p, size);
   } else if (strcmp(node->array.type, "number") == 0) {
-    insertFixedNumberArray(node, p, &size);
+    insertFixedNumberArray(node, p, size);
   }
 }
 
@@ -159,10 +153,8 @@ void printArray(SymbolTableEntry *entry, Parser *p) {
   if (strcmp(entry->type, "string") == 0) {
 
     char **elements = (char **)entry->value;
-
     for (int i = 0; i < entry->arraySize; i++) {
       if (elements[i]) {
-
         printf(YELLOW "%s" RESET, elements[i]);
         if (i < entry->arraySize - 1) {
           printf(", ");
@@ -226,6 +218,33 @@ void insertDynamicStringArray(AstNode *node, Parser *p) {
   if (err != SYMBOL_ERROR_NONE) {
     printSymbolError(err, node->loc, node->array.name, node->array.type);
     exit(EXIT_FAILURE);
+  }
+}
+
+void handleBound(AstNode *node, SymbolTableEntry *var, int index) {
+
+  if (var->isFixed) {
+    if (var->arraySize <= index) {
+      printEvalError(node->loc,
+                     "index out of bound canot access %d index. Array `%s` is "
+                     "only size of %d\n",
+                     var->arraySize, var->symbol, index);
+      exit(EXIT_FAILURE);
+    }
+  } else {
+    if (var->arraySize <= index) {
+      if (!(index <= var->arraySize)) {
+        printEvalError(node->loc, "cannot access  index %d ", index);
+        exit(EXIT_FAILURE);
+      }
+      if (strcmp(var->type, "string") == 0) {
+        var->value =
+            (char **)realloc(var->value, sizeof(char *) * (var->arraySize + 1));
+      } else {
+        var->value = (double *)realloc(var->value,
+                                       sizeof(double) * (var->arraySize + 1));
+      }
+    }
   }
 }
 
@@ -765,6 +784,15 @@ Result *EvalAst(AstNode *node, Parser *p) {
         freeResult(res);
         break;
       }
+      case NODE_ARRAY_ELEMENT_ACCESS: {
+        Result *res = EvalAst(stmt, p);
+        if (res->NodeType == NODE_STRING_LITERAL) {
+          printf(YELLOW "%s" RESET, trimQuotes((char *)res->result));
+        } else {
+          printf(MAGENTA "%0.lf", *(double *)res->result);
+        }
+        break;
+      }
       default:
         printf("node type is %s\n", nodeTypeNames[stmt->type]);
       }
@@ -772,38 +800,36 @@ Result *EvalAst(AstNode *node, Parser *p) {
     printf("\n");
     break;
   }
-    /*
-case NODE_ARRAY_ELEMENT_ACCESS: {
-SymbolTableEntry *var =
-    lookupSymbol(p->table, node->arrayElm.name, node->isParam);
 
-if (!var || !var->isArray) {
-  printEvalError(node->loc, " %s is not decleared\n",
-node->arrayElm.name); exit(EXIT_FAILURE);
-}
-Result *res = EvalAst(node->arrayElm.index, p);
-if (!res) {
-  printEvalError(node->loc, "invalid index");
-  exit(EXIT_FAILURE);
-}
-double idx = *(double *)res->result;
-int index = (int)idx;
-free(res);
-if (index >= var->arraySize) {
-  printEvalError(node->loc, "index out of bound");
-  exit(EXIT_FAILURE);
-}
+  case NODE_ARRAY_ELEMENT_ACCESS: {
+    SymbolTableEntry *var =
+        lookupSymbol(p->ctx, node->arrayElm.name, SYMBOL_KIND_VARIABLES);
 
-if (strcmp(var->type, "string") == 0) {
-  char *value = ((char **)var->value)[index];
-  return newResult(value, NODE_STRING_LITERAL, 0);
-} else {
-  double value = ((double *)var->value)[index];
-  return newResult(&value, NODE_NUMBER, 0);
-}
-}
+    if (!var || !var->isArray) {
+      printEvalError(node->loc, " %s is not decleared\n", node->arrayElm.name);
+      exit(EXIT_FAILURE);
+    }
+    Result *res = EvalAst(node->arrayElm.index, p);
+    if (!res) {
+      printEvalError(node->loc, "invalid index");
+      exit(EXIT_FAILURE);
+    }
+    double idx = *(double *)res->result;
+    int index = (int)idx;
+    free(res);
+    if (index >= var->arraySize) {
+      printEvalError(node->loc, "index out of bound");
+      exit(EXIT_FAILURE);
+    }
 
-*/
+    if (strcmp(var->type, "string") == 0) {
+      char *value = ((char **)var->value)[index];
+      return newResult(value, NODE_STRING_LITERAL, 0);
+    } else {
+      double value = ((double *)var->value)[index];
+      return newResult(&value, NODE_NUMBER, 0);
+    }
+  }
 
   // needs refactoring
   case NODE_ARRAY_INIT: {
@@ -825,123 +851,107 @@ if (strcmp(var->type, "string") == 0) {
     break;
   }
 
-  /*
-case NODE_ARRAY_DECLARATION: {
-  SymbolTableEntry *var =
-      lookupSymbol(p->table, node->array.name, node->isParam);
+    /*
+  case NODE_ARRAY_DECLARATION: {
+    SymbolTableEntry *var =
+        lookupSymbol(p->table, node->array.name, node->isParam);
 
-  if (var) {
-      printEvalError(node->loc, "cannot redeclare  %s is already
-  decleared\n", node->identifier.name); exit(EXIT_FAILURE);
-  }
-
-  if (node->array.arraySize) {
-    Result *result = EvalAst(node->array.arraySize, p);
-    double size = *(double *)result->result;
-    if (strcmp(node->array.type, "string") == 0) {
-      insertStrArraySymbol(p->table, node->array.name, node->array.type, size,
-                           NULL, node->array.isFixed, node->array.actualSize);
-    } else {
-      insertNumArraySymbol(p->table, node->array.name, node->array.type, size,
-                           NULL, node->array.isFixed);
+    if (var) {
+        printEvalError(node->loc, "cannot redeclare  %s is already
+    decleared\n", node->identifier.name); exit(EXIT_FAILURE);
     }
-  } else {
-    if (strcmp(node->array.type, "string") == 0) {
-      insertStrArraySymbol(p->table, node->array.name, node->array.type, 0,
-                           NULL, node->array.isFixed, node->array.actualSize);
-    } else {
-      insertNumArraySymbol(p->table, node->array.name, node->array.type, 0,
-                           NULL, node->array.isFixed);
-    }
-  }
-  break;
-}
-case NODE_ARRAY_ELEMENT_ASSIGN: {
 
-  SymbolTableEntry *var =
-      lookupSymbol(p->table, node->arrayElm.name, node->isParam);
-
-  if (!var) {
-    printEvalError(node->loc, "array %s is not decleared\n",
-                   node->arrayElm.name);
-    exit(EXIT_FAILURE);
-  }
-  if (!var->isArray) {
-    printEvalError(node->loc, " %s is not an array \n", node->arrayElm.name);
-    exit(EXIT_FAILURE);
-  }
-
-  Result *res = EvalAst(node->arrayElm.index, p);
-  double resIndex = *(double *)res->result;
-  int index = (int)resIndex;
-
-  if (var->isFixed) {
-    if (var->arraySize <= index) {
-        printEvalError(node->loc, "index out of bound canot access %d
-  index\n", node->array.arraySize); exit(EXIT_FAILURE);
-    }
-  } else {
-    if (var->arraySize <= index) {
-      if (!(index <= var->arraySize)) {
-        printEvalError(node->loc, "cannot access  index %dcn ", index);
-        exit(EXIT_FAILURE);
-      }
-      if (strcmp(var->type, "string") == 0) {
-
-        var->value = (char **)realloc(var->value,
-                                      sizeof(char *) * (var->arraySize + 1));
-
+    if (node->array.arraySize) {
+      Result *result = EvalAst(node->array.arraySize, p);
+      double size = *(double *)result->result;
+      if (strcmp(node->array.type, "string") == 0) {
+        insertStrArraySymbol(p->table, node->array.name, node->array.type, size,
+                             NULL, node->array.isFixed, node->array.actualSize);
       } else {
-        var->value = (double *)realloc(var->value,
-                                       sizeof(double) * (var->arraySize + 1));
+        insertNumArraySymbol(p->table, node->array.name, node->array.type, size,
+                             NULL, node->array.isFixed);
+      }
+    } else {
+      if (strcmp(node->array.type, "string") == 0) {
+        insertStrArraySymbol(p->table, node->array.name, node->array.type, 0,
+                             NULL, node->array.isFixed, node->array.actualSize);
+      } else {
+        insertNumArraySymbol(p->table, node->array.name, node->array.type, 0,
+                             NULL, node->array.isFixed);
       }
     }
+    break;
   }
+  */
+  case NODE_ARRAY_ELEMENT_ASSIGN: {
 
-  free(res); // freeing the previous result of index
+    SymbolTableEntry *var =
+        lookupSymbol(p->ctx, node->arrayElm.name, SYMBOL_KIND_VARIABLES);
 
-  res = EvalAst(node->arrayElm.value, p);
-  char *type = getDataType(res);
-
-  if (strcmp(type, var->type) != 0) {
-    printEvalError(node->loc, "cannot assign type of %s to %s", type,
-                   var->type);
-    exit(EXIT_FAILURE);
-  }
-
-  if (strcmp(var->type, "string") == 0) {
-    if (!var->value) {
-      var->value = (char **)malloc(sizeof(char *) * var->arraySize);
+    if (!var) {
+      printEvalError(node->loc, "array %s is not decleared\n",
+                     node->arrayElm.name);
+      exit(EXIT_FAILURE);
     }
-    ((char **)var->value)[index] = strdup((char *)res->result);
-    var->arraySize++;
-    free(res->result);
+    if (!var->isArray) {
+      printEvalError(node->loc, " %s is not an array \n", node->arrayElm.name);
+      exit(EXIT_FAILURE);
+    }
+
+    Result *res = EvalAst(node->arrayElm.index, p);
+    double resIndex = *(double *)res->result;
+    int index = (int)resIndex;
+
+    // checks and handles bound of array if fixed else increases the arr size
+    handleBound(node, var, index);
+    free(res); // freeing the previous result of index
+
+    res = EvalAst(node->arrayElm.value, p);
+    char *type = getDataType(res);
+
+    if (strcmp(type, var->type) != 0) {
+      printEvalError(node->loc, "cannot assign type of %s to %s", type,
+                     var->type);
+      exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(var->type, "string") == 0) {
+      if (!var->value) {
+        var->value = (char **)malloc(sizeof(char *) * var->arraySize);
+      }
+      ((char **)var->value)[index] = strdup((char *)res->result);
+
+      if (!var->isFixed) {
+        var->arraySize++;
+      }
+      free(res->result);
+      free(res);
+      break;
+    }
+
+    if (!var->value) {
+      var->value = (double *)malloc(sizeof(double) * var->arraySize);
+    }
+
+    ((double *)var->value)[index] = *(double *)res->result;
     free(res);
+
     break;
   }
 
-  if (!var->value) {
-    var->value = (double *)malloc(sizeof(double) * var->arraySize);
+  case NODE_BREAK: {
+    Result *res = newResult(NULL, NODE_BREAK, 0);
+    res->isBreak = 1;
+    return res;
   }
 
-  ((double *)var->value)[index] = *(double *)res->result;
-  free(res);
-  var->arraySize++;
-  break;
-}
+  case NODE_CONTNUE: {
+    Result *res = newResult(NULL, NODE_CONTNUE, 0);
+    res->isContinue = 1;
+    return res;
+  }
 
-case NODE_BREAK: {
-  Result *res = newResult(NULL, NODE_BREAK, 0);
-  res->isBreak = 1;
-  return res;
-}
-
-case NODE_CONTNUE: {
-  Result *res = newResult(NULL, NODE_CONTNUE, 0);
-  res->isContinue = 1;
-  return res;
-}
-
+    /*
 case NODE_WHILE_LOOP: {
 
   // TODO: still some errors mainly continue one;

@@ -1281,7 +1281,9 @@ AstNode *parseArray(Parser *p) {
     AstNode *value = logical(p);
     char *nodeType = getNodeType(value->type);
     return newArrayElmAssignNode(name->value, arraySize, value, *name->loc);
-  } else if (p->current->type == TOKEN_SEMI_COLON) {
+  } else if (p->current->type == TOKEN_SEMI_COLON ||
+             p->current->type == TOKEN_RPAREN ||
+             p->current->type == TOKEN_COMMA) {
     AstNode *node =
         newArrayElmAccessNode(arraySize, name->value, *p->current->loc);
     return node;
