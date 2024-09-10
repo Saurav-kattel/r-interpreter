@@ -40,6 +40,7 @@ SymbolContext *createSymbolContext(int capacity) {
 SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
                                    SymbolKind kind) {
   for (int j = 0; j < scope->size; j++) {
+
     SymbolTableEntry *entry = scope->entries[j];
     if (strcmp(entry->symbol, name) == 0) {
       switch (kind) {
@@ -48,14 +49,8 @@ SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
           return entry;
         }
         break;
-      case SYMBOL_KIND_ARRAYS:
-        if (entry->isArray) {
-          return entry;
-        }
-        break;
-
       case SYMBOL_KIND_VARIABLES:
-        if (!entry->isFn && !entry->isArray) {
+        if (!entry->isFn) {
           return entry;
         }
         break;
@@ -69,13 +64,54 @@ SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
   return NULL;
 }
 
+// enters the array and it's value in symbol table
+SymbolError insertArray(SymbolContext *ctx, char *name, char *type, int size,
+                        void *values, int isFixed) {
+
+  SymbolTable *gblTable = ctx->globalTable;
+
+  if (gblTable->size >= gblTable->capacity) {
+    gblTable->capacity *= 2;
+    gblTable->entries = realloc(gblTable->entries, sizeof(SymbolTableEntry *) *
+                                                       gblTable->capacity);
+    if (gblTable->entries == NULL) {
+      return SYMBOL_MEM_ERROR; // Handle realloc failure
+    }
+  }
+
+  // Allocate memory for a new SymbolTableEntry
+  gblTable->entries[gblTable->size] =
+      (SymbolTableEntry *)malloc(sizeof(SymbolTableEntry));
+  if (gblTable->entries[gblTable->size] == NULL) {
+    return SYMBOL_MEM_ERROR; // Handle malloc failure
+  }
+
+  if (strcmp(type, "string") == 0) {
+    ctx->globalTable->entries[ctx->globalTable->size]->value = values;
+  } else {
+    ctx->globalTable->entries[ctx->globalTable->size]->value = values;
+  }
+
+  ctx->globalTable->entries[ctx->globalTable->size]->symbol = strdup(name);
+  ctx->globalTable->entries[ctx->globalTable->size]->type = strdup(type);
+  ctx->globalTable->entries[ctx->globalTable->size]->arraySize = size;
+  ctx->globalTable->entries[ctx->globalTable->size]->isArray = 1;
+  ctx->globalTable->entries[ctx->globalTable->size]->isGlobal = 1;
+  ctx->globalTable->entries[ctx->globalTable->size]->isFixed = isFixed;
+  ctx->globalTable->size++;
+  return SYMBOL_ERROR_NONE;
+}
+
+// searches the iden or fn name inside global context
 SymbolTableEntry *lookupGlobalScope(SymbolTable *table, char *name,
                                     SymbolKind kind) {
   return lookupLocalScope(table, name, kind);
 }
 
+// searches for the entry in both scopes
 SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
                                SymbolKind kind) {
+
   for (int i = context->stack->frameCount - 1; i >= 0; i--) {
     StackFrame *frame = context->stack->frames[i];
     SymbolTable *localScope = frame->localTable;
@@ -90,6 +126,7 @@ SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
   return lookupGlobalScope(context->globalTable, name, kind);
 }
 
+// entires the entry in global scope
 SymbolError insertGlobalSymbol(SymbolContext *ctx, char *type, char *name,
                                Result *value, SymbolKind kind) {
 
@@ -136,6 +173,7 @@ SymbolError insertGlobalSymbol(SymbolContext *ctx, char *type, char *name,
   return SYMBOL_ERROR_NONE;
 }
 
+// entirs the function in global scope
 SymbolError insertFunction(SymbolTable *gblTable, char *name, char *type,
                            int paramCount, FuncParams **params, AstNode *body,
                            SymbolKind kind) {
@@ -180,6 +218,7 @@ SymbolError insertFunction(SymbolTable *gblTable, char *name, char *type,
   return SYMBOL_ERROR_NONE;
 }
 
+// entires the function entry in local scope
 SymbolError insertFnStack(SymbolContext *ctx, char *name, char *type,
                           int paramCount, FuncParams **params, AstNode *body,
                           SymbolKind kind) {
@@ -234,6 +273,7 @@ SymbolError insertFnStack(SymbolContext *ctx, char *name, char *type,
   return SYMBOL_ERROR_NONE;
 }
 
+// handles the functions symbol entry
 SymbolError insertFunctionSymbol(SymbolContext *ctx, char *name, char *type,
                                  int paramCount, FuncParams **params,
                                  SymbolKind kind, AstNode *body, int level) {
@@ -257,12 +297,14 @@ SymbolError insertFunctionSymbol(SymbolContext *ctx, char *name, char *type,
   return SYMBOL_ERROR_NONE;
 }
 
+// TODO: local scope symbol entry not implemented
 SymbolError insertSymbol(SymbolContext *ctx, char *type, char *name,
                          Result *value, SymbolKind kind) {
 
   return insertGlobalSymbol(ctx, type, name, value, kind);
 }
 
+// updates the value of particular symbol inside the context
 SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value) {
 
   switch (value->NodeType) {

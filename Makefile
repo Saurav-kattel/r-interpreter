@@ -28,7 +28,7 @@ TARGET = main
 TEST_TARGET = test_main
 
 # Define the flags
-CFLAGS = -Wall -Wextra -g
+CFLAGS =  -Wextra -g
 LDFLAGS = 
 
 # Default target
