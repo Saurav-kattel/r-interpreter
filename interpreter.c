@@ -335,77 +335,70 @@ Result *EvalAst(AstNode *node, Parser *p) {
     return res;
   }
 
-    /*
-              case NODE_FUNCTION_PARAM: {
-                enterScope(p->table);
-                insertSymbol(p->table, node->identifier.name,
-       node->identifier.type, NULL, node->isParam); exitScope(p->table); break;
-              }
+  case NODE_FUNCTION: {
+    SymbolTableEntry *sym = lookupSymbol(p->ctx, node->function.defination.name,
+                                         SYMBOL_KIND_FUNCTION);
 
-              case NODE_FUNCTION: {
-                SymbolTableEntry *sym =
-                    lookupFnSymbol(p->table, node->function.defination.name);
-         {       if (sym) {
-                  exit(EXIT_FAILURE);
-                }
+    if (sym) {
+      printEvalError(node->loc, "%s is already defined",
+                     node->function.defination.name);
+      exit(EXIT_FAILURE);
+    }
 
-                insertFnSymbol(
-                    p->table, node->function.defination.name,
-                    node->function.defination.returnType,
-              node->function.defination.params, node->function.defination.body,
-              node->function.defination.paramsCount);
+    insertFunctionSymbol(p->ctx, node->function.defination.name,
+                         node->function.defination.returnType,
+                         node->function.defination.paramsCount,
+                         node->function.defination.params, SYMBOL_KIND_FUNCTION,
+                         node->function.defination.body, p->level);
 
-                for (int i = 0; i < node->function.defination.paramsCount; i++)
-       { Result *res = EvalAst(node->function.defination.params[i], p); if (res)
-       { free(res->result); free(res);
-                  }
-                }
+    break;
+  }
 
-                break;
-              }
-              case NODE_FUNCTION_CALL: {
-                SymbolTableEntry *sym = lookupFnSymbol(p->table,
-              node->function.call.name); if (!sym) { printEvalError(node->loc,
-              "undeclared function %s was called\n", node->function.call.name);
-                  exit(EXIT_FAILURE);
-                }
-                // update the func symbol table params with the value of args
-                enterScope(p->table);
+  case NODE_FUNCTION_CALL: {
+    SymbolTableEntry *sym =
+        lookupSymbol(p->ctx, node->function.call.name, SYMBOL_KIND_FUNCTION);
+    if (!sym) {
+      printEvalError(node->loc, "undeclared function %s was called\n",
+                     node->function.call.name);
+      exit(EXIT_FAILURE);
+    }
+    // update the func symbol table params with the value of args
+    p->level++;
 
-                for (int i = 0; i < node->function.call.argsCount; i++) {
-                  Result *res = EvalAst(node->function.call.args[i], p);
-                  char *paramType =
-       sym->function.parameters[i]->identifier.type;
+    enterScope(p->ctx);
+    for (int i = 0; i < node->function.call.argsCount; i++) {
+      Result *res = EvalAst(node->function.call.args[i], p);
 
-                  if (strcmp(paramType, getDataType(res)) != 0) {
-                    printEvalError(node->loc, "expected argument of type %s but
-       got %s", paramType, getDataType(res)); exit(EXIT_FAILURE);
-                  }
+      char *paramType = sym->function.params[i]->type;
 
-                  updateSymbolTableValue(p->table,
-                                         sym->function.parameters[i]->identifier.name,
-              res, sym->function.parameters[i]->identifier.type, 1);
-                }
-                exitScope(p->table);
+      if (strcmp(paramType, getDataType(res)) != 0) {
+        printEvalError(node->loc, "expected argument of type %s  but got %s",
+                       paramType, getDataType(res));
+        exit(EXIT_FAILURE);
+      }
+      updateParamWithArgs(sym, i, res);
+    }
+    Result *value = EvalAst(sym->function.body, p);
 
-                Result *value = EvalAst(sym->function.functionBody, p);
+    if (sym->type && (value == NULL)) {
+      printEvalError(node->loc, "expected return type to be %s but got void\n",
+                     sym->type);
+      exit(EXIT_FAILURE);
+    }
 
-                if (sym->function.returnType && (value == NULL)) {
-                  printEvalError(node->loc, "expected return type to be %s but
-       got void\n", sym->function.returnType); exit(EXIT_FAILURE);
-                }
+    if (strcmp(sym->type, getDataType(value)) != 0) {
+      printEvalError(
+          node->loc,
+          " cannot return %s from the function with  the return type of %s",
+          getDataType(value), sym->type);
+      exit(EXIT_FAILURE);
+    }
 
-                if (strcmp(sym->function.returnType, getDataType(value)) != 0) {
-                  printEvalError(node->loc,
-                                 " cannot return %s "
-                                 "from the function with the return type of %s
-       ", getDataType(value), sym->function.returnType); exit(EXIT_FAILURE);
-                }
+    exitScope(p->ctx);
+    p->level--;
 
-                return value;
-              }
-
-*/
+    return value;
+  }
 
   case NODE_BINARY_OP: {
     Result *left = EvalAst(node->binaryOp.left, p);
@@ -1129,13 +1122,14 @@ void freeAst(AstNode *node) {
     }
     for (int i = 0; i < node->function.defination.paramsCount; i++) {
       if (node->function.defination.params[i]) {
-        freeAst(node->function.defination.params[i]);
-        node->function.defination.params[i] = NULL;
+        FuncParams *params = node->function.defination.params[i];
+        free(params->name);
+        free(params->type);
+        if (params->value) {
+          free(params->value);
+        }
+        free(params);
       }
-    }
-    if (node->function.defination.params) {
-      free(node->function.defination.params);
-      node->function.defination.params = NULL;
     }
     break;
   case NODE_NUMBER:

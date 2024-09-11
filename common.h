@@ -159,7 +159,7 @@ struct AstNode {
         struct {
           char *name;
           char *returnType;
-          AstNode **params;
+          FuncParams **params;
           int paramsCount;
           AstNode *body;
         } defination;

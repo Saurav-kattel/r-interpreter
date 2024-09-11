@@ -312,6 +312,10 @@ Token *GetNextToken(Lexer *l) {
 
   if (c == '-') {
     if (!isAtEnd(l)) {
+      if (peek(l) == '>') {
+        advance(l);
+        return NewToken(l, TOKEN_ARROW, "->");
+      }
       return NewToken(l, TOKEN_MINUS, "-");
     }
     printf("invalid expression \n");

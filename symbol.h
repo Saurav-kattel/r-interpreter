@@ -40,6 +40,7 @@ SymbolError insertArray(SymbolContext *ctx, char *name, char *type, int size,
 SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value);
 void enterScope(SymbolContext *);
 void exitScope(SymbolContext *);
+void updateParamWithArgs(SymbolTableEntry *sym, int index, Result *res);
 
 SymbolContext *createSymbolContext(int capacity);
 #endif // SYMBOL_H_

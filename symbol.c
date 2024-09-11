@@ -48,6 +48,7 @@ void exitScope(SymbolContext *ctx) {
   }
   for (int i = 0; i < table->size; i++) {
     SymbolTableEntry *entry = table->entries[i];
+
     if (!entry) {
       continue;
     }
@@ -73,7 +74,17 @@ void exitScope(SymbolContext *ctx) {
     free(entry->type);
 
     if (entry->isFn) {
-      // TODO: free functions
+      if (entry->function.body) {
+        freeAst(entry->function.body);
+      }
+      for (int i = 0; i < entry->function.parameterCount; i++) {
+        free(entry->function.params[i]->name);
+        if (strcmp(entry->function.params[i]->type, "string") == 0) {
+          free(entry->function.params[i]->value);
+        }
+        free(entry->function.params[i]->type);
+      }
+      free(entry->function.params);
     }
   }
   ctx->stack->frameCount--;
@@ -100,7 +111,7 @@ void enterScope(SymbolContext *ctx) {
   // Increment frame count since we've entered a new scope
   ctx->stack->frameCount++;
 }
-
+#if 0
 SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
                                    SymbolKind kind) {
   for (int j = 0; j < scope->size; j++) {
@@ -127,7 +138,49 @@ SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
   }
   return NULL;
 }
+#endif
 
+SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
+                                   SymbolKind kind) {
+  for (int j = 0; j < scope->size; j++) {
+
+    SymbolTableEntry *entry = scope->entries[j];
+    if (strcmp(entry->symbol, name) == 0) {
+      switch (kind) {
+      case SYMBOL_KIND_FUNCTION:
+        if (entry->isFn) {
+          return entry;
+        }
+        break;
+      case SYMBOL_KIND_VARIABLES:
+        if (!entry->isFn) {
+          return entry;
+        }
+        break;
+      }
+    }
+
+    // If we are looking for a variable, it could be a function parameter.
+    if (entry->isFn && entry->function.parameterCount > 0) {
+      // Check for parameters in the function's parameter list
+      for (int k = 0; k < entry->function.parameterCount; k++) {
+        FuncParams *param = entry->function.params[k];
+        if (strcmp(param->name, name) == 0) {
+          // Create a temporary SymbolTableEntry for the parameter
+          SymbolTableEntry *paramEntry = malloc(sizeof(SymbolTableEntry));
+          paramEntry->symbol = param->name;
+          paramEntry->type = param->type;
+          paramEntry->value = param->value;
+          paramEntry->isArray = param->isArray;
+          paramEntry->isFn = param->isFunc;
+          return paramEntry; // Return the entry for the parameter
+        }
+      }
+    }
+  }
+
+  return NULL;
+}
 // enters the array and it's value in symbol table
 SymbolError insertArray(SymbolContext *ctx, char *name, char *type, int size,
                         void *values, int isFixed) {
@@ -223,6 +276,13 @@ SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
     }
   }
 
+  if (frame->localTable->capacity == 0) {
+    // if somehow capacity is 0
+    frame->localTable->capacity = 4;
+    frame->localTable->entries =
+        malloc(sizeof(SymbolTableEntry *) * frame->localTable->capacity);
+  }
+
   SymbolTable *locTable = frame->localTable;
 
   // If the frame's level is less than the current level, update the level
@@ -232,17 +292,30 @@ SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
   }
 
   // Handle reallocation of the local table's entries if necessary
+
+  // Handle reallocation of the local table's entries if necessary
   if (locTable->size >= locTable->capacity) {
-    locTable->capacity *= 2;
-    locTable->entries = realloc(locTable->entries, sizeof(SymbolTableEntry *) *
-                                                       locTable->capacity);
-    if (!locTable->entries) {
+    // Attempt to realloc with a temporary pointer to avoid overwriting in case
+    // of failure
+    size_t newCapacity = locTable->capacity * 2;
+    SymbolTableEntry **temp =
+        realloc(locTable->entries, sizeof(SymbolTableEntry *) * newCapacity);
+
+    // Check for memory allocation failure
+    if (!temp) {
+      // Handle the memory allocation error
+      fprintf(stderr, "Memory allocation error during realloc\n");
       return SYMBOL_MEM_ERROR;
     }
+
+    // If successful, update the entries and capacity
+    locTable->entries = temp;
+    locTable->capacity = newCapacity;
   }
 
   // Allocate and initialize the new symbol table entry
   locTable->entries[locTable->size] = malloc(sizeof(SymbolTableEntry));
+
   if (!locTable->entries[locTable->size]) {
     return SYMBOL_MEM_ERROR;
   }
@@ -426,6 +499,14 @@ SymbolError insertFnStack(SymbolContext *ctx, char *name, char *type,
   ctx->stack->frameCount++;
   return SYMBOL_ERROR_NONE;
 }
+
+void updateParamWithArgs(SymbolTableEntry *sym, int index, Result *res) {
+  if (res->NodeType == NODE_STRING_LITERAL) {
+    sym->function.params[index]->value = strdup((char *)res->result);
+  } else {
+    sym->function.params[index]->value = (double *)res->result;
+  }
+};
 
 // handles the functions symbol entry
 SymbolError insertFunctionSymbol(SymbolContext *ctx, char *name, char *type,
