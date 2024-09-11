@@ -652,8 +652,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
       if (result && (result->isReturn || result->isBreak)) {
         p->level--;
         return result;
-      } else if (result && ast->type == NODE_FUNCTION_READ_IN) {
-        // pending
+      } else if (result &&
+                 (ast->type == NODE_FUNCTION_READ_IN || result->isContinue)) {
         return result;
       }
     };
@@ -955,53 +955,51 @@ Result *EvalAst(AstNode *node, Parser *p) {
     return res;
   }
 
-    /*
-case NODE_WHILE_LOOP: {
+  case NODE_WHILE_LOOP: {
+    p->level++;
+    enterScope(p->ctx);
+    Result *result = EvalAst(node->whileLoop.condition, p);
+    double condition = 0;
+    if (result) { // Check if result is non-null
+      if (result->result) {
+        condition = *(double *)result->result;
+      }
+      free(result->result); // Free the dynamically allocated memory pointed to
+      // by result->result, if applicable
+      free(result); // Free the Result structure itself
+    };
 
-  // TODO: still some errors mainly continue one;
+    while (condition) {
+      Result *blockRes = EvalAst(node->whileLoop.body, p);
 
-  enterScope(p->table);
-  Result *result = EvalAst(node->whileLoop.condition, p);
-  double condition = 0;
-  if (result) { // Check if result is non-null
-    if (result->result) {
-      condition = *(double *)result->result;
-    }
-    free(result->result); // Free the dynamically allocated memory pointed
-    to
-        // by result->result, if applicable
-        free(result); // Free the Result structure itself
-  };
+      if (blockRes && blockRes->isReturn) {
+        return blockRes;
+      }
 
-  while (condition) {
-    Result *blockRes = EvalAst(node->whileLoop.body, p);
+      if (blockRes && blockRes->isContinue) {
+        freeResult(blockRes);
+        result = EvalAst(node->whileLoop.condition, p);
+        condition = *(double *)result->result;
+        free(result);
+        continue;
+      }
 
-    if (blockRes && blockRes->isReturn) {
-      return blockRes;
-    }
+      // Handle break: exit the loop
+      if (blockRes && blockRes->isBreak) {
+        freeResult(blockRes);
+        break;
+      }
 
-    if (blockRes && blockRes->isContinue) {
       freeResult(blockRes);
-      result = EvalAst(node->whileLoop.condition, p);
-      condition = *(double *)result->result;
-      free(result);
-      continue;
-    }
-
-    // Handle break: exit the loop
-    if (blockRes && blockRes->isBreak) {
+      blockRes = EvalAst(node->whileLoop.condition, p);
+      condition = *(double *)blockRes->result;
       freeResult(blockRes);
-      break;
     }
-    freeResult(blockRes);
-    blockRes = EvalAst(node->whileLoop.condition, p);
-    condition = *(double *)blockRes->result;
-    freeResult(blockRes);
+    exitScope(p->ctx);
+    p->level--;
+    break;
   }
-  exitScope(p->table);
-  break;
-}
-*/
+
   case NODE_FOR_LOOP: {
     p->level++;
     enterScope(p->ctx);
