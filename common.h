@@ -22,7 +22,7 @@ typedef struct SymbolTableEntry {
   int isArray;   // determines the the symbol entry is array or just variable
   int isFixed;   // determies if the array is dynamic or fixed size array
   int arraySize; // keeps the recored of the size of array;
-
+  int isParam;
   // functions
   int isFn;
   struct {

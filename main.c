@@ -50,6 +50,70 @@ void addToProgram(AstNode *ast, Program *pg) {
   pg->size++;
 }
 
+void freeTable(SymbolTable *table) {
+
+  if (!table) {
+    return;
+  }
+
+  for (int i = 0; i < table->size; i++) {
+    SymbolTableEntry *entry = table->entries[i];
+
+    if (!entry) {
+      continue;
+    }
+    free(entry->symbol);
+    if (entry->isArray) {
+      if (strcmp(entry->type, "string") == 0) {
+        for (int j = 0; j < entry->arraySize; j++) {
+          if (!((char **)entry->value)[j]) {
+            continue;
+          }
+          free(((char **)entry->value)[j]);
+          free(entry->type);
+        }
+        continue;
+      }
+      free(entry->value);
+      free(entry->type);
+      continue;
+    }
+
+    if (strcmp(entry->type, "string") == 0) {
+      free(entry->value);
+    }
+
+    free(entry->type);
+
+    if (entry->isFn) {
+      if (entry->function.body) {
+        freeAst(entry->function.body);
+      }
+      for (int i = 0; i < entry->function.parameterCount; i++) {
+        free(entry->function.params[i]->name);
+        if (strcmp(entry->function.params[i]->type, "string") == 0) {
+          free(entry->function.params[i]->value);
+        }
+        free(entry->function.params[i]->type);
+      }
+      free(entry->function.params);
+    }
+  }
+  free(table);
+}
+
+void freeSymbolContext(SymbolContext *ctx) {
+
+  StackFrame **frames = ctx->stack->frames;
+  for (int i = 0; i < ctx->stack->frameCount; i++) {
+    exitScope(ctx);
+  }
+  free(frames);
+  free(ctx->stack);
+  freeTable(ctx->globalTable);
+  free(ctx);
+}
+
 int main(int argc, char **argv) {
   FILE *fp;
 
@@ -107,7 +171,16 @@ int main(int argc, char **argv) {
 
     AstNode *ast = parseAst(p);
     if (ast) {
-      EvalAst(ast, p);
+      Result *res = EvalAst(ast, p);
+      if (res != NULL) {
+        if (res->result != NULL) {
+          if (res->NodeType == NODE_STRING_LITERAL) {
+            free(res->result);
+          }
+        }
+        free(res);
+      }
+      freeAst(ast);
     }
   }
 
@@ -124,6 +197,7 @@ int main(int argc, char **argv) {
      }
   }
 */
+
   for (int i = 0; i < p->size; i++) {
     freeTokens(p->tokens[i]);
   }
@@ -132,6 +206,7 @@ int main(int argc, char **argv) {
   free(p->lex->source);
   free(p->lex->filename);
   free(p->lex);
+  freeSymbolContext(p->ctx);
   free(p);
   fclose(fp);
   free(file_content);

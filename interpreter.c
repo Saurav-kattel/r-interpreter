@@ -73,7 +73,7 @@ void printSymbolError(SymbolError err, Loc loc, char *name, char *type) {
 }
 
 Result *newResult(void *data, int nodeType, size_t dataSize) {
-  Result *res = (Result *)malloc(sizeof(Result));
+  Result *res = (Result *)calloc(1, sizeof(Result));
   res->NodeType = nodeType;
   if (nodeType == NODE_STRING_LITERAL) {
     res->result = strdup((char *)data);
@@ -143,6 +143,48 @@ void handleFixedArrayInsert(AstNode *node, Parser *p) {
     insertFixedStringArray(node, p, size);
   } else if (strcmp(node->array.type, "number") == 0) {
     insertFixedNumberArray(node, p, size);
+  }
+}
+
+void freeEntry(SymbolTableEntry *entry) {
+
+  if (entry->isParam) {
+    free(entry->symbol);
+
+    if (strcmp(entry->type, "string") == 0) {
+      free(entry->value);
+    }
+
+    if (entry->isArray) {
+      if (strcmp(entry->type, "string") == 0) {
+        for (int i = 0; i < entry->arraySize; i++) {
+          free(((char **)entry->value)[i]);
+        }
+      }
+
+      free(entry->value);
+    }
+
+    free(entry->type);
+
+    if (entry->isFn) {
+
+      freeAst(entry->function.body);
+
+      for (int i = 0; i < entry->function.parameterCount; i++) {
+
+        free(entry->function.params[i]->name);
+
+        if (strcmp(entry->function.params[i]->type, "string") == 0) {
+          free(entry->function.params[i]->value);
+        }
+
+        free(entry->function.params[i]->type);
+      }
+      free(entry->function.params);
+    }
+
+    free(entry);
   }
 }
 
@@ -377,6 +419,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
         exit(EXIT_FAILURE);
       }
       updateParamWithArgs(sym, i, res);
+      freeResult(res);
     }
     Result *value = EvalAst(sym->function.body, p);
 
@@ -553,15 +596,13 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
 
     Result *res = EvalAst(node->identifier.value, p);
+
     char *type = getDataType(res);
 
     if (strcmp(type, var->type) != 0) {
       printEvalError(node->loc, "cannot assign type of %s to type of %s", type,
                      var->type);
-      if (res->NodeType == NODE_STRING_LITERAL) {
-        free(res->result);
-      }
-      free(res);
+      freeResult(res);
       exit(EXIT_FAILURE);
     }
 
@@ -571,6 +612,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
                        node->identifier.type);
       exit(EXIT_FAILURE);
     }
+
     break;
   }
 
@@ -644,6 +686,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
       Result *result = EvalAst(ast, p);
       if (result && (result->isReturn || result->isBreak)) {
         p->level--;
+        exitScope(p->ctx);
         return result;
       } else if (result &&
                  (ast->type == NODE_FUNCTION_READ_IN || result->isContinue)) {
@@ -746,23 +789,27 @@ Result *EvalAst(AstNode *node, Parser *p) {
       AstNode *stmt = node->print.statments[i];
       switch (stmt->type) {
       case NODE_IDENTIFIER_VALUE: {
-
         SymbolTableEntry *entry =
             lookupSymbol(p->ctx, stmt->identifier.name, SYMBOL_KIND_VARIABLES);
 
         if (!entry) {
-          printf("(null) no entry found");
+          printf("null no entry found");
           break;
         }
+
         if (entry->isArray) {
+          freeEntry(entry);
           printArray(entry, p);
           break;
         }
+
         Result *res = EvalAst(stmt, p);
         printResult(res);
         freeResult(res);
+        freeEntry(entry);
         break;
       }
+
       case NODE_STRING_LITERAL: {
         Result *res = EvalAst(stmt, p);
         printResult(res);
@@ -776,6 +823,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
         freeResult(res);
         break;
       }
+
       case NODE_ARRAY_ELEMENT_ACCESS: {
         Result *res = EvalAst(stmt, p);
         if (res->NodeType == NODE_STRING_LITERAL) {
@@ -998,8 +1046,10 @@ Result *EvalAst(AstNode *node, Parser *p) {
     enterScope(p->ctx);
     // initialize the variable at first
     EvalAst(node->loopFor.initializer, p);
+
     Result *result = EvalAst(node->loopFor.condition, p);
     double condition = *(double *)result->result;
+    freeResult(result);
     while (condition) {
       // evaluates the body
       Result *blockRes = EvalAst(node->loopFor.loopBody, p);
@@ -1033,6 +1083,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
       // handle the icrDcr statement
       EvalAst(node->loopFor.icrDcr, p);
+      freeResult(result);
       result = EvalAst(node->loopFor.condition, p);
       condition = *(double *)result->result;
     }
@@ -1120,6 +1171,7 @@ void freeAst(AstNode *node) {
       freeAst(node->function.defination.body);
       node->function.defination.body = NULL;
     }
+
     for (int i = 0; i < node->function.defination.paramsCount; i++) {
       if (node->function.defination.params[i]) {
         FuncParams *params = node->function.defination.params[i];
@@ -1131,6 +1183,8 @@ void freeAst(AstNode *node) {
         free(params);
       }
     }
+    free(node->function.defination.params);
+
     break;
   case NODE_NUMBER:
   case NODE_CONTNUE:
@@ -1317,10 +1371,12 @@ AstNode *parseAst(Parser *p) {
     consume(TOKEN_SEMI_COLON, p);
     return ast;
   }
+
   case TOKEN_FN: {
     AstNode *ast = parseFunction(p);
     return ast;
   }
+
   case TOKEN_STRING: {
     AstNode *ast = string(p);
     // Assuming statements end with a semicolon
@@ -1374,50 +1430,3 @@ AstNode *parseAst(Parser *p) {
   }
   return NULL;
 }
-
-/*
-void freeSymbolTable(SymbolTable *table) {
-  if (table) {
-
-    for (int i = 0; i < table->size; i++) {
-      SymbolTableEntry *entry = &table->entries[i];
-
-      if (entry->isArray && entry->value) {
-        if (strcmp(entry->type, "string") == 0) {
-          for (int j = 0; j < entry->arraySize; j++) {
-            if (((char **)entry->value)[j]) {
-              free(((char **)entry->value)[j]);
-            }
-          }
-          freeAst(entry->value);
-        } else {
-          freeAst(entry->value);
-        }
-      }
-      // Free function related memory
-      if (entry->isFn) {
-        if (entry->function.name) {
-          free(entry->function.name);
-        }
-        if (entry->function.returnType) {
-          free(entry->function.returnType);
-        }
-      }
-      if (entry->type) {
-        free(entry->type);
-      }
-      if (entry->symbol) {
-        free(entry->symbol);
-      }
-    }
-    free(table->entries);
-    free(table);
-  }
-}
-}
-return NULL;
-}
-}
-}
-
-*/

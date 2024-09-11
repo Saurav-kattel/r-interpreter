@@ -1,6 +1,7 @@
 
 #include "symbol.h"
 #include "common.h"
+#include "interpreter.h"
 #include "parser.h"
 
 #include <stdio.h>
@@ -37,56 +38,69 @@ SymbolContext *createSymbolContext(int capacity) {
   return ctx;
 }
 
+void freeSymbolArray(SymbolTableEntry *entry) {
+
+  if (strcmp(entry->type, "string") == 0) {
+    for (int j = 0; j < entry->arraySize; j++) {
+      free(((char **)entry->value)[j]);
+    }
+  }
+  free(entry->value);
+}
+
+void freeFnSymbol(SymbolTableEntry *entry) {
+
+  if (entry->function.body) {
+    freeAst(entry->function.body);
+  }
+
+  for (int i = 0; i < entry->function.parameterCount; i++) {
+    free(entry->function.params[i]->name);
+    if (strcmp(entry->function.params[i]->type, "string") == 0) {
+      free(entry->function.params[i]->value);
+    }
+    free(entry->function.params[i]->type);
+  }
+
+  free(entry->function.params);
+}
+
 void exitScope(SymbolContext *ctx) {
   StackFrame *frame = ctx->stack->frames[ctx->stack->frameCount - 1];
+
   if (!frame) {
     return;
   }
+
   SymbolTable *table = frame->localTable;
   if (!table) {
     return;
   }
+
   for (int i = 0; i < table->size; i++) {
     SymbolTableEntry *entry = table->entries[i];
 
     if (!entry) {
       continue;
     }
-
     free(entry->symbol);
 
-    if (entry->isArray) {
-      if (strcmp(entry->type, "string") == 0) {
-        for (int j = 0; j < entry->arraySize; j++) {
-          if (!((char **)entry->value)[j]) {
-            continue;
-          }
-          free(((char **)entry->value)[j]);
-        }
-        continue;
-      }
-      free(entry->value);
-      continue;
-    }
     if (strcmp(entry->type, "string") == 0) {
       free(entry->value);
     }
-    free(entry->type);
+
+    if (entry->isArray) {
+      freeSymbolArray(entry);
+    }
 
     if (entry->isFn) {
-      if (entry->function.body) {
-        freeAst(entry->function.body);
-      }
-      for (int i = 0; i < entry->function.parameterCount; i++) {
-        free(entry->function.params[i]->name);
-        if (strcmp(entry->function.params[i]->type, "string") == 0) {
-          free(entry->function.params[i]->value);
-        }
-        free(entry->function.params[i]->type);
-      }
-      free(entry->function.params);
+      freeSymbolArray(entry);
     }
+
+    free(entry->type);
   }
+  free(table);
+  free(frame);
   ctx->stack->frameCount--;
 }
 
@@ -111,35 +125,6 @@ void enterScope(SymbolContext *ctx) {
   // Increment frame count since we've entered a new scope
   ctx->stack->frameCount++;
 }
-#if 0
-SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
-                                   SymbolKind kind) {
-  for (int j = 0; j < scope->size; j++) {
-
-    SymbolTableEntry *entry = scope->entries[j];
-    if (strcmp(entry->symbol, name) == 0) {
-      switch (kind) {
-      case SYMBOL_KIND_FUNCTION: {
-        if (entry->isFn) {
-          return entry;
-        }
-        break;
-      case SYMBOL_KIND_VARIABLES:
-        if (!entry->isFn) {
-          return entry;
-        }
-        break;
-      }
-      default:
-        printf("unknown lookup type");
-        exit(1);
-      }
-    }
-  }
-  return NULL;
-}
-#endif
-
 SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
                                    SymbolKind kind) {
   for (int j = 0; j < scope->size; j++) {
@@ -277,7 +262,7 @@ SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
   }
 
   if (frame->localTable->capacity == 0) {
-    // if somehow capacity is 0
+
     frame->localTable->capacity = 4;
     frame->localTable->entries =
         malloc(sizeof(SymbolTableEntry *) * frame->localTable->capacity);
@@ -548,16 +533,17 @@ SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value) {
     if (strcmp(entry->type, "string") != 0) {
       return SYMBOL_TYPE_ERROR;
     }
+    free(entry->value);
     entry->value = strdup((char *)value->result);
     break;
   }
-  case NODE_NUMBER: {
+  case NODE_NUMBER:
     if (strcmp(entry->type, "number") != 0) {
       return SYMBOL_TYPE_ERROR;
     }
     entry->value = (double *)value->result;
     break;
   }
-  }
+  freeResult(value);
   return SYMBOL_ERROR_NONE;
 }
