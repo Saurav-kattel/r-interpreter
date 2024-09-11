@@ -1211,7 +1211,7 @@ void parseDynamicArray(Parser *p, AstNode ***elements, Token *type,
   int currentSize = 0;
   int capacity = 10;
 
-  *elements = (AstNode **)malloc(sizeof(AstNode *) * capacity);
+  *elements = (AstNode **)calloc(capacity, sizeof(AstNode *));
   if (*elements == NULL) {
     printf("cannot allocated enough memory for array *elements ");
     exit(EXIT_FAILURE);

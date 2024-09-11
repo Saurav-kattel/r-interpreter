@@ -19,21 +19,22 @@ char *inferTypeFromResult(Result *res) {
 }
 
 SymbolContext *createSymbolContext(int capacity) {
-  SymbolContext *ctx = (SymbolContext *)malloc(sizeof(*ctx));
+  SymbolContext *ctx = (SymbolContext *)calloc(1, sizeof(*ctx));
 
   // Initialize global table
-  ctx->globalTable = (SymbolTable *)malloc(sizeof(SymbolTable));
+  ctx->globalTable = (SymbolTable *)calloc(1, sizeof(SymbolTable));
   ctx->globalTable->capacity = capacity;
   ctx->globalTable->size = 0;
-  ctx->globalTable->entries = (SymbolTableEntry **)malloc(
-      sizeof(SymbolTableEntry *) * ctx->globalTable->capacity);
+
+  ctx->globalTable->entries = (SymbolTableEntry **)calloc(
+      ctx->globalTable->capacity, sizeof(SymbolTableEntry *));
 
   // Initialize the stack
-  ctx->stack = (Stack *)malloc(sizeof(Stack));
+  ctx->stack = (Stack *)calloc(1, sizeof(Stack));
   ctx->stack->capacity = capacity;
   ctx->stack->frameCount = 0;
   ctx->stack->frames =
-      (StackFrame **)malloc(sizeof(StackFrame *) * ctx->stack->capacity);
+      (StackFrame **)calloc(1, sizeof(StackFrame *) * ctx->stack->capacity);
 
   return ctx;
 }
@@ -98,6 +99,7 @@ void exitScope(SymbolContext *ctx) {
     }
 
     free(entry->type);
+    free(entry);
   }
   free(table);
   free(frame);
@@ -152,7 +154,7 @@ SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
         FuncParams *param = entry->function.params[k];
         if (strcmp(param->name, name) == 0) {
           // Create a temporary SymbolTableEntry for the parameter
-          SymbolTableEntry *paramEntry = malloc(sizeof(SymbolTableEntry));
+          SymbolTableEntry *paramEntry = calloc(1, sizeof(SymbolTableEntry));
           paramEntry->symbol = param->name;
           paramEntry->type = param->type;
           paramEntry->value = param->value;
@@ -183,17 +185,12 @@ SymbolError insertArray(SymbolContext *ctx, char *name, char *type, int size,
 
   // Allocate memory for a new SymbolTableEntry
   gblTable->entries[gblTable->size] =
-      (SymbolTableEntry *)malloc(sizeof(SymbolTableEntry));
+      (SymbolTableEntry *)calloc(1, sizeof(SymbolTableEntry));
   if (gblTable->entries[gblTable->size] == NULL) {
     return SYMBOL_MEM_ERROR; // Handle malloc failure
   }
 
-  if (strcmp(type, "string") == 0) {
-    ctx->globalTable->entries[ctx->globalTable->size]->value = values;
-  } else {
-    ctx->globalTable->entries[ctx->globalTable->size]->value = values;
-  }
-
+  ctx->globalTable->entries[ctx->globalTable->size]->value = values;
   ctx->globalTable->entries[ctx->globalTable->size]->symbol = strdup(name);
   ctx->globalTable->entries[ctx->globalTable->size]->type = strdup(type);
   ctx->globalTable->entries[ctx->globalTable->size]->arraySize = size;
@@ -255,7 +252,7 @@ SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
     // Initialize capacity
     frame->localTable->capacity = 4; // Starting with a small capacity
     frame->localTable->entries =
-        malloc(sizeof(SymbolTableEntry *) * frame->localTable->capacity);
+        calloc(frame->localTable->capacity, sizeof(SymbolTableEntry *));
     if (!frame->localTable->entries) {
       return SYMBOL_MEM_ERROR;
     }
@@ -265,7 +262,7 @@ SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
 
     frame->localTable->capacity = 4;
     frame->localTable->entries =
-        malloc(sizeof(SymbolTableEntry *) * frame->localTable->capacity);
+        calloc(frame->localTable->capacity, sizeof(SymbolTableEntry *));
   }
 
   SymbolTable *locTable = frame->localTable;
@@ -299,7 +296,7 @@ SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
   }
 
   // Allocate and initialize the new symbol table entry
-  locTable->entries[locTable->size] = malloc(sizeof(SymbolTableEntry));
+  locTable->entries[locTable->size] = calloc(1, sizeof(SymbolTableEntry));
 
   if (!locTable->entries[locTable->size]) {
     return SYMBOL_MEM_ERROR;
@@ -350,13 +347,14 @@ SymbolError insertGlobalSymbol(SymbolContext *ctx, char *type, char *name,
 
   int size = ctx->globalTable->size;
   if (size >= ctx->globalTable->capacity) {
+
     ctx->globalTable->capacity *= 2;
     ctx->globalTable->entries =
         realloc(ctx->globalTable->entries,
                 sizeof(SymbolTableEntry *) * ctx->globalTable->capacity);
   }
 
-  ctx->globalTable->entries[size] = malloc(sizeof(SymbolTableEntry));
+  ctx->globalTable->entries[size] = calloc(1, sizeof(SymbolTableEntry));
   ctx->globalTable->entries[size]->symbol = strdup(name);
   ctx->globalTable->entries[size]->type = strdup(type);
   ctx->globalTable->entries[size]->isGlobal = 1;
@@ -400,7 +398,7 @@ SymbolError insertFunction(SymbolTable *gblTable, char *name, char *type,
 
   // Allocate memory for a new SymbolTableEntry
   gblTable->entries[gblTable->size] =
-      (SymbolTableEntry *)malloc(sizeof(SymbolTableEntry));
+      (SymbolTableEntry *)calloc(1, sizeof(SymbolTableEntry));
   if (gblTable->entries[gblTable->size] == NULL) {
     return SYMBOL_MEM_ERROR; // Handle malloc failure
   }
@@ -414,7 +412,7 @@ SymbolError insertFunction(SymbolTable *gblTable, char *name, char *type,
 
   // Allocate memory for the parameter array in the function symbol
   gblTable->entries[gblTable->size]->function.params =
-      malloc(paramCount * sizeof(FuncParams *));
+      calloc(paramCount, sizeof(FuncParams *));
   if (gblTable->entries[gblTable->size]->function.params == NULL) {
     return SYMBOL_MEM_ERROR; // Handle malloc failure for params
   }
@@ -446,14 +444,14 @@ SymbolError insertFnStack(SymbolContext *ctx, char *name, char *type,
 
   // Allocate memory for the new StackFrame if necessary
   ctx->stack->frames[ctx->stack->frameCount] =
-      (StackFrame *)malloc(sizeof(StackFrame));
+      (StackFrame *)calloc(1, sizeof(StackFrame));
   if (!ctx->stack->frames[ctx->stack->frameCount]) {
     return SYMBOL_MEM_ERROR;
   }
 
   // Initialize the local symbol table in the new stack frame
   StackFrame *newFrame = ctx->stack->frames[ctx->stack->frameCount];
-  newFrame->localTable = (SymbolTable *)malloc(sizeof(SymbolTable));
+  newFrame->localTable = (SymbolTable *)calloc(1, sizeof(SymbolTable));
   if (!newFrame->localTable) {
     return SYMBOL_MEM_ERROR;
   }
@@ -461,8 +459,8 @@ SymbolError insertFnStack(SymbolContext *ctx, char *name, char *type,
   // Initialize local table's capacity and entries
   newFrame->localTable->capacity = 10; // or some initial value
   newFrame->localTable->size = 0;
-  newFrame->localTable->entries = (SymbolTableEntry **)malloc(
-      sizeof(SymbolTableEntry *) * newFrame->localTable->capacity);
+  newFrame->localTable->entries = (SymbolTableEntry **)calloc(
+      newFrame->localTable->capacity, sizeof(SymbolTableEntry *));
   if (!newFrame->localTable->entries) {
     return SYMBOL_MEM_ERROR;
   }

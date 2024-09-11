@@ -231,7 +231,7 @@ void printArray(SymbolTableEntry *entry, Parser *p) {
 void insertDynamicStringArray(AstNode *node, Parser *p) {
   int size = 0;
   int capacity = 10;
-  char **values = (char **)malloc(sizeof(char *) * capacity);
+  char **values = (char **)calloc(capacity, sizeof(char *));
 
   while (1) {
     if (node->array.elements[size]) {
@@ -1044,12 +1044,12 @@ Result *EvalAst(AstNode *node, Parser *p) {
   case NODE_FOR_LOOP: {
     p->level++;
     enterScope(p->ctx);
-    // initialize the variable at first
     EvalAst(node->loopFor.initializer, p);
 
     Result *result = EvalAst(node->loopFor.condition, p);
     double condition = *(double *)result->result;
     freeResult(result);
+
     while (condition) {
       // evaluates the body
       Result *blockRes = EvalAst(node->loopFor.loopBody, p);
@@ -1060,37 +1060,37 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
       // free  the result if result is valid and is not a type of return
       if (blockRes && blockRes->isContinue) {
-        free(blockRes->result);
-        free(blockRes);
+        freeResult(blockRes);
         EvalAst(node->loopFor.icrDcr, p);
-        result = EvalAst(node->loopFor.condition, p);
-        condition = *(double *)result->result;
+
+        Result *newResult = EvalAst(node->loopFor.condition, p);
+        condition = *(double *)newResult->result;
+        freeResult(newResult);
+
         continue; // Skip the rest of the loop body
       }
 
       // Handle break: exit the loop
       if (blockRes && blockRes->isBreak) {
-        free(blockRes->result);
-        free(blockRes);
+        freeResult(blockRes);
         exitScope(p->ctx);
         break; // Exit the loop
       }
-
-      if (blockRes) {
-        free(blockRes->result);
-        free(blockRes);
-      }
+      // free the previous result of the body
+      freeResult(blockRes);
 
       // handle the icrDcr statement
       EvalAst(node->loopFor.icrDcr, p);
-      freeResult(result);
-      result = EvalAst(node->loopFor.condition, p);
-      condition = *(double *)result->result;
+
+      Result *newResult = EvalAst(node->loopFor.condition, p);
+      condition = *(double *)newResult->result;
+      freeResult(newResult);
     }
     exitScope(p->ctx);
     p->level--;
     break;
   }
+
   default:
     printEvalError(node->loc, "Error: Unexpected node type %s\n",
                    nodeTypeNames[node->type]);
@@ -1224,6 +1224,9 @@ void freeAst(AstNode *node) {
       }
       free(node->array.elements);
     }
+    if (node->array.arraySize) {
+      free(node->array.arraySize);
+    }
 
     break;
   }
@@ -1328,6 +1331,7 @@ void freeAst(AstNode *node) {
 
   // Free the node itself
   free(node);
+  node = NULL;
 }
 
 AstNode *parseAst(Parser *p) {

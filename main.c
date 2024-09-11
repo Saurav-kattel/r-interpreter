@@ -51,40 +51,38 @@ void addToProgram(AstNode *ast, Program *pg) {
 }
 
 void freeTable(SymbolTable *table) {
-
   if (!table) {
     return;
   }
 
   for (int i = 0; i < table->size; i++) {
     SymbolTableEntry *entry = table->entries[i];
-
     if (!entry) {
       continue;
     }
+
+    // Free the symbol
     free(entry->symbol);
+
+    // Free the array (if applicable)
     if (entry->isArray) {
       if (strcmp(entry->type, "string") == 0) {
         for (int j = 0; j < entry->arraySize; j++) {
-          if (!((char **)entry->value)[j]) {
-            continue;
-          }
           free(((char **)entry->value)[j]);
-          free(entry->type);
         }
-        continue;
       }
       free(entry->value);
-      free(entry->type);
-      continue;
     }
 
-    if (strcmp(entry->type, "string") == 0) {
+    // Free the value (if it's a string and not an array)
+    if (!entry->isArray && strcmp(entry->type, "string") == 0) {
       free(entry->value);
     }
 
+    // Free the type
     free(entry->type);
 
+    // Free function-related memory
     if (entry->isFn) {
       if (entry->function.body) {
         freeAst(entry->function.body);
@@ -98,17 +96,23 @@ void freeTable(SymbolTable *table) {
       }
       free(entry->function.params);
     }
+
+    // Now, free the SymbolTableEntry itself
+    free(entry);
   }
+
+  // Free the array of entries
+  free(table->entries);
   free(table);
 }
 
 void freeSymbolContext(SymbolContext *ctx) {
 
-  StackFrame **frames = ctx->stack->frames;
   for (int i = 0; i < ctx->stack->frameCount; i++) {
-    exitScope(ctx);
+    freeTable(ctx->stack->frames[i]->localTable);
   }
-  free(frames);
+
+  free(ctx->stack->frames);
   free(ctx->stack);
   freeTable(ctx->globalTable);
   free(ctx);
@@ -155,8 +159,7 @@ int main(int argc, char **argv) {
 
   Parser *p = InitParser(lex, ctx);
 
-  /*
-  Program *prog = (Program *)(sizeof(Program));
+  Program *prog = (Program *)calloc(1, sizeof(Program));
 
   if (prog == NULL) {
     printf("buy more ram\n");
@@ -164,39 +167,31 @@ int main(int argc, char **argv) {
   }
 
   prog->size = 0;
-  prog->capacity = 10;
-  prog->program = (AstNode **)malloc(sizeof(AstNode) * prog->capacity);
-*/
+  prog->capacity = 10000;
+  prog->program = (AstNode **)calloc(prog->capacity, sizeof(AstNode));
+
   while (p->current->type != TOKEN_EOF) {
 
     AstNode *ast = parseAst(p);
     if (ast) {
-      Result *res = EvalAst(ast, p);
-      if (res != NULL) {
-        if (res->result != NULL) {
-          if (res->NodeType == NODE_STRING_LITERAL) {
-            free(res->result);
-          }
-        }
-        free(res);
-      }
-      freeAst(ast);
+      addToProgram(ast, prog);
+      prog->size++;
     }
   }
 
-  /*
   for (int i = 0; i < prog->size; i++) {
-    Result *res = EvalAst(prog->program[i], p);
-     if (res != NULL) {
-       if (res->result != NULL) {
-         if (res->NodeType == NODE_STRING_LITERAL) {
-           free(res->result);
-         }
-       }
-       free(res);
-     }
+    if (prog->program[i]) {
+      Result *res = EvalAst(prog->program[i], p);
+      freeResult(res);
+    }
   }
-*/
+
+  for (int i = 0; i < prog->size; i++) {
+    freeAst(prog->program[i]);
+  }
+
+  free(prog->program);
+  free(prog);
 
   for (int i = 0; i < p->size; i++) {
     freeTokens(p->tokens[i]);
