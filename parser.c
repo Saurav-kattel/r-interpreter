@@ -4,8 +4,6 @@
 #include "interpreter.h"
 #include "lexer.h"
 
-#include "symbol.h"
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -872,7 +870,7 @@ AstNode *ifElseParser(Parser *p) {
 // ------------------------parsing functions-------------------------------
 
 AstNode *newFnParams(Parser *p, char *fnName, char *returnType, int paramsCount,
-                     AstNode **params, AstNode *fnBody) {
+                     FuncParams **params, AstNode *fnBody) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
     printf("failed allocating memory for the ast\n");
@@ -889,7 +887,7 @@ AstNode *newFnParams(Parser *p, char *fnName, char *returnType, int paramsCount,
   return node;
 }
 
-AstNode *parseFnParams(Parser *p) {
+FuncParams *parseFnParams(Parser *p) {
   Loc loc = *p->current->loc;
   if (p->current->type != TOKEN_IDEN) {
     printError(p->current, "expcted %s but got %s in function paramteres",
@@ -919,12 +917,12 @@ AstNode *parseFnParams(Parser *p) {
     consume(TOKEN_COMMA, p);
   }
 
-  AstNode *ast = newIdentifierNode(paramType, paramName, NULL, p,
-                                   NODE_FUNCTION_PARAM, 1, loc);
-
+  FuncParams *param = calloc(1, sizeof(FuncParams));
+  param->name = strdup(paramName);
+  param->type = strdup(paramType);
   free(paramName);
   free(paramType);
-  return ast;
+  return param;
 }
 
 AstNode *parseFunction(Parser *p) {
@@ -936,24 +934,26 @@ AstNode *parseFunction(Parser *p) {
   consume(TOKEN_FN, p);
   char *fnName = p->current->value;
   consume(TOKEN_IDEN, p);
-  consume(TOKEN_COLON, p);
-  char *returnType = p->current->value;
-  consume(TOKEN_IDEN, p);
+
   consume(TOKEN_LPAREN, p);
 
   int paramsSize = 2;
-  AstNode **params = (AstNode **)malloc(sizeof(AstNode *) * 2);
+  FuncParams **params = (FuncParams **)malloc(sizeof(FuncParams *) * 2);
   int paramsCount = 0;
 
   while (p->current->type != TOKEN_RPAREN) {
     if (paramsCount >= paramsSize) {
-      params = (AstNode **)realloc(params, paramsSize *= 2);
+      params = (FuncParams **)realloc(params, paramsSize *= 2);
     }
-    AstNode *ast = parseFnParams(p);
-    params[paramsCount++] = ast;
+    FuncParams *param = parseFnParams(p);
+    params[paramsCount++] = param;
   }
-
   consume(TOKEN_RPAREN, p);
+
+  consume(TOKEN_ARROW, p);
+  char *returnType = p->current->value;
+
+  consume(TOKEN_IDEN, p);
   AstNode *fnBody = parseBlockStmt(p);
   return newFnParams(p, fnName, returnType, paramsCount, params, fnBody);
 }
@@ -1211,7 +1211,7 @@ void parseDynamicArray(Parser *p, AstNode ***elements, Token *type,
   int currentSize = 0;
   int capacity = 10;
 
-  *elements = (AstNode **)malloc(sizeof(AstNode *) * capacity);
+  *elements = (AstNode **)calloc(capacity, sizeof(AstNode *));
   if (*elements == NULL) {
     printf("cannot allocated enough memory for array *elements ");
     exit(EXIT_FAILURE);

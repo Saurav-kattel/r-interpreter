@@ -34,10 +34,13 @@ SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
                                SymbolKind kind);
 
 SymbolError insertSymbol(SymbolContext *ctx, char *type, char *name,
-                         Result *value, SymbolKind kind);
+                         Result *value, SymbolKind kind, int level);
 SymbolError insertArray(SymbolContext *ctx, char *name, char *type, int size,
                         void *values, int isFixed);
 SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value);
+void enterScope(SymbolContext *);
+void exitScope(SymbolContext *);
+void updateParamWithArgs(SymbolTableEntry *sym, int index, Result *res);
 
 SymbolContext *createSymbolContext(int capacity);
 #endif // SYMBOL_H_
