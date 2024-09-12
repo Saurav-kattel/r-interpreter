@@ -4,6 +4,7 @@
 #include "interpreter.h"
 #include "parser.h"
 
+#include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,7 +69,6 @@ void freeFnSymbol(SymbolTableEntry *entry) {
 
 void exitScope(SymbolContext *ctx) {
   StackFrame *frame = ctx->stack->frames[ctx->stack->frameCount - 1];
-
   if (!frame) {
     return;
   }
@@ -98,9 +98,11 @@ void exitScope(SymbolContext *ctx) {
       freeSymbolArray(entry);
     }
 
+    free(entry->value);
     free(entry->type);
     free(entry);
   }
+  free(table->entries);
   free(table);
   free(frame);
   ctx->stack->frameCount--;
@@ -227,7 +229,7 @@ SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
 
 SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
                               Result *value, SymbolKind kind, int level) {
-
+  printf("fcount %d\n", ctx->stack->frameCount);
   // Check if the symbol already exists
   SymbolTableEntry *entry = lookupSymbol(ctx, name, kind);
   if (entry) {
@@ -531,7 +533,9 @@ SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value) {
     if (strcmp(entry->type, "string") != 0) {
       return SYMBOL_TYPE_ERROR;
     }
-    free(entry->value);
+    if (entry->value) {
+      free(entry->value);
+    }
     entry->value = strdup((char *)value->result);
     break;
   }
@@ -539,9 +543,9 @@ SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value) {
     if (strcmp(entry->type, "number") != 0) {
       return SYMBOL_TYPE_ERROR;
     }
+
     entry->value = (double *)value->result;
     break;
   }
-  freeResult(value);
   return SYMBOL_ERROR_NONE;
 }

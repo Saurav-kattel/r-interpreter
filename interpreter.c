@@ -75,6 +75,7 @@ void printSymbolError(SymbolError err, Loc loc, char *name, char *type) {
 Result *newResult(void *data, int nodeType, size_t dataSize) {
   Result *res = (Result *)calloc(1, sizeof(Result));
   res->NodeType = nodeType;
+
   if (nodeType == NODE_STRING_LITERAL) {
     res->result = strdup((char *)data);
   } else {
@@ -86,7 +87,7 @@ Result *newResult(void *data, int nodeType, size_t dataSize) {
 
 void freeResult(Result *res) {
   if (res) {
-    if (res->result && res->NodeType == NODE_STRING_LITERAL) {
+    if (res->result) {
       free(res->result);
     }
     free(res);
@@ -444,6 +445,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
   }
 
   case NODE_BINARY_OP: {
+
     Result *left = EvalAst(node->binaryOp.left, p);
     Result *right = EvalAst(node->binaryOp.right, p);
 
@@ -457,6 +459,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
       double leftVal = *(double *)(left->result);
       double rightVal = *(double *)(right->result);
 
+      free(left);
+      free(right);
       switch (node->binaryOp.op) {
       case TOKEN_PLUS:
         res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
@@ -516,8 +520,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
       }
 
       // Free the results used
-      free(left);
-      free(right);
+
       return res;
     } else if (left->NodeType == NODE_STRING_LITERAL &&
                right->NodeType == NODE_STRING_LITERAL) {
@@ -607,12 +610,12 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
 
     SymbolError err = updateSymbolTableValue(var, res);
+    free(res);
     if (err != SYMBOL_ERROR_NONE) {
       printSymbolError(err, node->loc, node->identifier.name,
                        node->identifier.type);
       exit(EXIT_FAILURE);
     }
-
     break;
   }
 
@@ -683,7 +686,9 @@ Result *EvalAst(AstNode *node, Parser *p) {
     enterScope(p->ctx);
     for (int i = 0; i < node->block.statementCount; i++) {
       AstNode *ast = node->block.statements[i];
+
       Result *result = EvalAst(ast, p);
+
       if (result && (result->isReturn || result->isBreak)) {
         p->level--;
         exitScope(p->ctx);
@@ -692,6 +697,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
                  (ast->type == NODE_FUNCTION_READ_IN || result->isContinue)) {
         return result;
       }
+
+      freeResult(result);
     };
     exitScope(p->ctx);
     p->level--;
@@ -805,8 +812,8 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
         Result *res = EvalAst(stmt, p);
         printResult(res);
-        freeResult(res);
         freeEntry(entry);
+        freeResult(res);
         break;
       }
 
@@ -1066,7 +1073,6 @@ Result *EvalAst(AstNode *node, Parser *p) {
         Result *newResult = EvalAst(node->loopFor.condition, p);
         condition = *(double *)newResult->result;
         freeResult(newResult);
-
         continue; // Skip the rest of the loop body
       }
 

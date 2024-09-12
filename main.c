@@ -78,7 +78,6 @@ void freeTable(SymbolTable *table) {
     if (!entry->isArray && strcmp(entry->type, "string") == 0) {
       free(entry->value);
     }
-
     // Free the type
     free(entry->type);
 
