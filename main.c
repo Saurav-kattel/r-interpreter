@@ -60,7 +60,6 @@ void freeTable(SymbolTable *table) {
     if (!entry) {
       continue;
     }
-
     // Free the symbol
     free(entry->symbol);
 
@@ -75,27 +74,22 @@ void freeTable(SymbolTable *table) {
     }
 
     // Free the value (if it's a string and not an array)
-    if (!entry->isArray && strcmp(entry->type, "string") == 0) {
+    if (!entry->isArray && !entry->isFn && strcmp(entry->type, "string") == 0) {
       free(entry->value);
     }
     // Free the type
     free(entry->type);
 
     // Free function-related memory
-    if (entry->isFn) {
-      if (entry->function.body) {
-        freeAst(entry->function.body);
-      }
+    if (entry->isFn && !entry->isParam) {
       for (int i = 0; i < entry->function.parameterCount; i++) {
-        free(entry->function.params[i]->name);
-        if (strcmp(entry->function.params[i]->type, "string") == 0) {
-          free(entry->function.params[i]->value);
-        }
-        free(entry->function.params[i]->type);
+        FuncParams *param = entry->function.params[i];
+        free(param->name);
+        free(param->type);
+        free(param);
       }
       free(entry->function.params);
     }
-
     // Now, free the SymbolTableEntry itself
     free(entry);
   }
@@ -180,8 +174,8 @@ int main(int argc, char **argv) {
 
   for (int i = 0; i < prog->size; i++) {
     if (prog->program[i]) {
-      Result *res = EvalAst(prog->program[i], p);
-      freeResult(res);
+      Result res = EvalAst(prog->program[i], p);
+      freeResult(&res);
     }
   }
 

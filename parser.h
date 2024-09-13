@@ -13,6 +13,7 @@
 #define RESET "\033[0m"
 
 static const char *nodeTypeNames[] = {
+    "node_none",
     "node_binary_op",
     "node_number",
     "node_string_literal",
@@ -39,6 +40,7 @@ static const char *nodeTypeNames[] = {
     "node_array_element_access",
 };
 enum {
+  NODE_NONE,
   NODE_BINARY_OP,
   NODE_NUMBER,
   NODE_STRING_LITERAL,

@@ -820,16 +820,12 @@ AstNode *parseBlockStmt(Parser *p) {
   blockNode->type = NODE_BLOCK;
   blockNode->block.statements = NULL;
   blockNode->block.statementCount = 0;
-
-  // TODO: implement enter and exit scope funCtions
-  //  enterScope(p->table);
-
   while (p->current->type != TOKEN_RCURLY && !parserIsAtEnd(p)) {
     AstNode *stmt = parseAst(p);
     addStatementToBlock(blockNode, stmt);
   }
   consume(TOKEN_RCURLY, p);
-  // exitScope(p->table);
+
   return blockNode;
 }
 
@@ -899,12 +895,12 @@ FuncParams *parseFnParams(Parser *p) {
                p->current->value);
     exit(EXIT_FAILURE);
   }
-  char *paramName = strdup(p->current->value);
+  Token *paramName = p->current;
   consume(TOKEN_IDEN, p);
 
   consume(TOKEN_COLON, p);
 
-  char *paramType = strdup(p->current->value);
+  Token *paramType = p->current;
 
   if (!checkValidType(p->current)) {
     printError(p->current, "unknown type parameter %s", p->current->value);
@@ -918,10 +914,8 @@ FuncParams *parseFnParams(Parser *p) {
   }
 
   FuncParams *param = calloc(1, sizeof(FuncParams));
-  param->name = strdup(paramName);
-  param->type = strdup(paramType);
-  free(paramName);
-  free(paramType);
+  param->name = strdup(paramName->value);
+  param->type = strdup(paramType->value);
   return param;
 }
 
