@@ -758,7 +758,6 @@ Result EvalAst(AstNode *node, Parser *p) {
       res = newResult((void *)ptr, NODE_NUMBER);
     }
 
-    free(buffer);
     return res;
   }
 
@@ -1286,6 +1285,13 @@ void freeAst(AstNode *node) {
     if (node->function.call.args) {
       free(node->function.call.args);
       node->function.call.args = NULL;
+    }
+
+    break;
+
+  case NODE_FUNCTION_READ_IN:
+    if (node->read.type) {
+      free(node->read.type);
     }
     break;
   }
