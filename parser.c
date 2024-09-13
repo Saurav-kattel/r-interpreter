@@ -205,7 +205,7 @@ int checkValidType(Token *typeToken) {
 
 AstNode *newArrayNode(char *name, char *type, int isFixed, int actualSize,
                       AstNode *size, AstNode **elements, Loc loc) {
-  AstNode *node = (AstNode *)malloc(sizeof(AstNode));
+  AstNode *node = (AstNode *)calloc(1, sizeof(AstNode));
   if (!node) {
     printf("unable to allocate new ast node\n");
     exit(EXIT_FAILURE);
@@ -1161,7 +1161,7 @@ void parseFixedArray(Parser *p, AstNode ***elements, Token *type,
   int currentSize = 0;
   int capacity = 10;
 
-  *elements = (AstNode **)malloc(sizeof(AstNode *) * capacity);
+  *elements = (AstNode **)calloc(capacity, sizeof(AstNode *));
   capacity *= 2;
   *elements = (AstNode **)realloc(*elements, sizeof(AstNode *) * capacity);
   if (elements == NULL) {

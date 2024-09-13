@@ -89,7 +89,7 @@ void freeResult(Result *res) {
 }
 
 void insertFixedStringArray(AstNode *node, Parser *p, int size) {
-  char **values = (char **)malloc(sizeof(char *) * size);
+  char **values = (char **)calloc(size, sizeof(char *));
 
   for (int i = 0; i < node->array.actualSize; i++) {
     if (node->array.elements[i]) {
@@ -109,7 +109,7 @@ void insertFixedStringArray(AstNode *node, Parser *p, int size) {
 }
 
 void insertFixedNumberArray(AstNode *node, Parser *p, int size) {
-  double *values = (double *)malloc(sizeof(double) * (size));
+  double *values = (double *)calloc(size, sizeof(double));
   for (int i = 0; i < size; i++) {
     if (node->array.elements[i]) {
       Result res = EvalAst(node->array.elements[i], p);
