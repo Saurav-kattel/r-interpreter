@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
   for (int i = 0; i < prog->size; i++) {
     if (prog->program[i]) {
       Result res = EvalAst(prog->program[i], p);
-      freeResult(&res);
+      //  freeResult(&res);
     }
   }
 

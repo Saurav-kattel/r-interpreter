@@ -82,7 +82,10 @@ Result newResult(void *data, int nodeType) {
 
 void freeResult(Result *res) {
   if (res && res->NodeType == NODE_STRING_LITERAL) {
-    free(res->result);
+    if (res->result) {
+
+      free(res->result);
+    }
   } else if (res && res->isAllocated) {
     free(res->result);
   }
