@@ -72,13 +72,11 @@ void populateTokens(Parser *p, Lexer *lex, int initialCapacity, int *size) {
 }
 // initializing the parser
 Parser *InitParser(Lexer *lex, SymbolContext *ctx) {
-  Parser *p = (Parser *)malloc(sizeof(Parser));
+  Parser *p = (Parser *)calloc(1, sizeof(Parser));
   if (p == NULL) {
     printf("unable to allocate parser");
     exit(EXIT_FAILURE);
   }
-
-  memset(p, 0, sizeof(Parser));
   p->lex = lex;
   int size = 0;
   p->level = 0;
@@ -865,8 +863,9 @@ AstNode *ifElseParser(Parser *p) {
 
 // ------------------------parsing functions-------------------------------
 
-AstNode *newFnParams(Parser *p, char *fnName, char *returnType, int paramsCount,
-                     FuncParams **params, AstNode *fnBody) {
+AstNode *newFunctionDefination(Parser *p, char *fnName, char *returnType,
+                               int paramsCount, FuncParams **params,
+                               AstNode *fnBody) {
   AstNode *node = (AstNode *)malloc(sizeof(AstNode));
   if (!node) {
     printf("failed allocating memory for the ast\n");
@@ -946,10 +945,10 @@ AstNode *parseFunction(Parser *p) {
 
   consume(TOKEN_ARROW, p);
   char *returnType = p->current->value;
-
   consume(TOKEN_IDEN, p);
   AstNode *fnBody = parseBlockStmt(p);
-  return newFnParams(p, fnName, returnType, paramsCount, params, fnBody);
+  return newFunctionDefination(p, fnName, returnType, paramsCount, params,
+                               fnBody);
 }
 
 AstNode *parseFnArguments(Parser *p) {

@@ -317,8 +317,11 @@ static char *getDataType(Result res) {
     return "number";
   case NODE_STRING_LITERAL:
     return "string";
+
+  case NODE_NONE:
+    return "void";
   }
-  printf("unknown result type\n");
+  printf("unknown result type %s\n", nodeTypeNames[res.NodeType]);
   exit(EXIT_FAILURE);
 }
 
@@ -377,15 +380,22 @@ Result EvalAst(AstNode *node, Parser *p) {
                        paramType, getDataType(res));
         exit(EXIT_FAILURE);
       }
+
       updateParamWithArgs(sym, i, &res);
       freeResult(&res);
     }
 
     Result value = EvalAst(sym->function.body, p);
 
-    if (sym->type && (value.NodeType == NODE_NONE)) {
-      printEvalError(node->loc, "expected return type to be %s but got void\n",
-                     sym->type);
+    if ((strcmp(sym->type, "void") != 0) && (value.NodeType == NODE_NONE)) {
+      printEvalError(node->loc, "expected return type to be %s but got %s\n",
+                     sym->type, getDataType(value));
+      exit(EXIT_FAILURE);
+    }
+
+    if ((strcmp(sym->type, "void") == 0) && (value.NodeType != NODE_NONE)) {
+      printEvalError(node->loc, "expected return type to be %s but got %s\n",
+                     sym->type, getDataType(value));
       exit(EXIT_FAILURE);
     }
 
@@ -397,7 +407,11 @@ Result EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
 
-    return value;
+    if (strcmp(sym->type, "void") != 0) {
+      return value;
+    }
+    freeResult(&value);
+    break;
   }
 
   case NODE_BINARY_OP: {

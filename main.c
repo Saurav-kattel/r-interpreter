@@ -166,6 +166,7 @@ int main(int argc, char **argv) {
   while (p->current->type != TOKEN_EOF) {
 
     AstNode *ast = parseAst(p);
+
     if (ast) {
       addToProgram(ast, prog);
       prog->size++;

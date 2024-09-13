@@ -402,10 +402,12 @@ SymbolError insertGlobalSymbol(SymbolContext *ctx, char *type, char *name,
   if (strcmp(inferredType, type) != 0) {
     return SYMBOL_TYPE_ERROR;
   }
+
   if (strcmp(type, "string") == 0) {
     ctx->globalTable->entries[size]->value = strdup((char *)value->result);
     free(value->result);
   }
+
   if (strcmp(type, "number") == 0) {
     ctx->globalTable->entries[size]->value = (double *)value->result;
   }
@@ -437,6 +439,7 @@ SymbolError insertFunction(SymbolTable *gblTable, char *name, char *type,
   gblTable->entries[gblTable->size]->isFn = 1;
   gblTable->entries[gblTable->size]->symbol = strdup(name);
   gblTable->entries[gblTable->size]->type = strdup(type);
+
   gblTable->entries[gblTable->size]->function.parameterCount = paramCount;
   gblTable->entries[gblTable->size]->function.body = body;
 
@@ -515,8 +518,12 @@ SymbolError insertFnStack(SymbolContext *ctx, char *name, char *type,
 
 void updateParamWithArgs(SymbolTableEntry *sym, int index, Result *res) {
   if (res->NodeType == NODE_STRING_LITERAL) {
+
+    if (sym->function.params[index]->value) {
+      free(sym->function.params[index]->value);
+    }
     sym->function.params[index]->value = strdup((char *)res->result);
-  } else {
+  } else if (res->NodeType == NODE_NUMBER) {
     sym->function.params[index]->value = (double *)res->result;
   }
 };
