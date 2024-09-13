@@ -19,10 +19,11 @@ typedef struct SymbolTableEntry {
   char *type;   // Type field for each symbol table entry
   int isGlobal; // Flag to determine if it is global
   // arrays
-  int isArray;   // determines the the symbol entry is array or just variable
+  int isAllocated;
+  int isArray;
+  int isParam;
   int isFixed;   // determies if the array is dynamic or fixed size array
   int arraySize; // keeps the recored of the size of array;
-  int isParam;
   // functions
   int isFn;
   struct {
@@ -63,6 +64,7 @@ typedef struct Result {
   int isBreak;
   int isContinue;
   int isReturn;
+  int isAllocated;
 } Result;
 
 typedef struct {

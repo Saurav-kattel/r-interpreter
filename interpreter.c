@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 
 #define MAX_STRING_LENGTH 255
 
@@ -72,36 +73,29 @@ void printSymbolError(SymbolError err, Loc loc, char *name, char *type) {
   }
 }
 
-Result *newResult(void *data, int nodeType, size_t dataSize) {
-  Result *res = (Result *)calloc(1, sizeof(Result));
-  res->NodeType = nodeType;
-
-  if (nodeType == NODE_STRING_LITERAL) {
-    res->result = strdup((char *)data);
-  } else {
-    res->result = (double *)data;
-  }
-  res->isReturn = 0;
+Result newResult(void *data, int nodeType) {
+  Result res = {0};
+  res.NodeType = nodeType;
+  res.result = data;
   return res;
 }
 
 void freeResult(Result *res) {
-  if (res) {
-    if (res->result) {
-      free(res->result);
-    }
-    free(res);
+  if (res && res->NodeType == NODE_STRING_LITERAL) {
+    free(res->result);
+  } else if (res && res->isAllocated) {
+    free(res->result);
   }
 }
 
 void insertFixedStringArray(AstNode *node, Parser *p, int size) {
-  char **values = (char **)malloc(sizeof(char *) * size);
+  char **values = (char **)calloc(size, sizeof(char *));
 
   for (int i = 0; i < node->array.actualSize; i++) {
     if (node->array.elements[i]) {
-      Result *res = EvalAst(node->array.elements[i], p);
-      values[i] = strdup((char *)res->result);
-      freeResult(res);
+      Result res = EvalAst(node->array.elements[i], p);
+      values[i] = strdup((char *)res.result);
+      freeResult(&res);
     }
   }
 
@@ -115,14 +109,11 @@ void insertFixedStringArray(AstNode *node, Parser *p, int size) {
 }
 
 void insertFixedNumberArray(AstNode *node, Parser *p, int size) {
-  double *values = (double *)malloc(sizeof(double) * (size));
+  double *values = (double *)calloc(size, sizeof(double));
   for (int i = 0; i < size; i++) {
     if (node->array.elements[i]) {
-      Result *res = EvalAst(node->array.elements[i], p);
-      values[i] = *(double *)res->result;
-      if (res) {
-        free(res);
-      }
+      Result res = EvalAst(node->array.elements[i], p);
+      values[i] = *(double *)res.result;
     }
   }
 
@@ -136,8 +127,8 @@ void insertFixedNumberArray(AstNode *node, Parser *p, int size) {
 
 void handleFixedArrayInsert(AstNode *node, Parser *p) {
 
-  Result *res = EvalAst(node->array.arraySize, p);
-  double arraySize = *(double *)res->result;
+  Result res = EvalAst(node->array.arraySize, p);
+  double arraySize = *(double *)res.result;
 
   int size = (int)arraySize;
   if (strcmp(node->array.type, "string") == 0) {
@@ -150,41 +141,6 @@ void handleFixedArrayInsert(AstNode *node, Parser *p) {
 void freeEntry(SymbolTableEntry *entry) {
 
   if (entry->isParam) {
-    free(entry->symbol);
-
-    if (strcmp(entry->type, "string") == 0) {
-      free(entry->value);
-    }
-
-    if (entry->isArray) {
-      if (strcmp(entry->type, "string") == 0) {
-        for (int i = 0; i < entry->arraySize; i++) {
-          free(((char **)entry->value)[i]);
-        }
-      }
-
-      free(entry->value);
-    }
-
-    free(entry->type);
-
-    if (entry->isFn) {
-
-      freeAst(entry->function.body);
-
-      for (int i = 0; i < entry->function.parameterCount; i++) {
-
-        free(entry->function.params[i]->name);
-
-        if (strcmp(entry->function.params[i]->type, "string") == 0) {
-          free(entry->function.params[i]->value);
-        }
-
-        free(entry->function.params[i]->type);
-      }
-      free(entry->function.params);
-    }
-
     free(entry);
   }
 }
@@ -236,8 +192,8 @@ void insertDynamicStringArray(AstNode *node, Parser *p) {
 
   while (1) {
     if (node->array.elements[size]) {
-      Result *res = EvalAst(node->array.elements[size], p);
-      if (!res) {
+      Result res = EvalAst(node->array.elements[size], p);
+      if (res.NodeType == NODE_NONE) {
         break;
       }
 
@@ -257,8 +213,8 @@ void insertDynamicStringArray(AstNode *node, Parser *p) {
         values = newValues;
       }
 
-      values[size] = strdup((char *)res->result);
-      freeResult(res);
+      values[size] = strdup((char *)res.result);
+      freeResult(&res);
       (size)++;
     } else {
       break;
@@ -308,16 +264,16 @@ void insertDynamicNumberArray(AstNode *node, Parser *p) {
   double *values = (double *)malloc(sizeof(double) * capacity);
   while (1) {
     if (node->array.elements[size]) {
-      Result *res = EvalAst(node->array.elements[size], p);
-      if (!res) {
+      Result res = EvalAst(node->array.elements[size], p);
+      if (res.NodeType == NODE_NONE) {
         break;
       }
 
       if (size >= capacity) {
         values = (double *)realloc(values, (sizeof(double) * (capacity *= 2)));
       }
-      values[size] = *(double *)res->result;
-      freeResult(res);
+      values[size] = *(double *)res.result;
+      freeResult(&res);
       size++;
     } else {
       break;
@@ -352,8 +308,8 @@ static char *inferDatatype(AstNode *node) {
   exit(EXIT_FAILURE);
 }
 
-static char *getDataType(Result *res) {
-  switch (res->NodeType) {
+static char *getDataType(Result res) {
+  switch (res.NodeType) {
   case NODE_NUMBER:
     return "number";
   case NODE_STRING_LITERAL:
@@ -364,17 +320,16 @@ static char *getDataType(Result *res) {
 }
 
 // eval ast function
-Result *EvalAst(AstNode *node, Parser *p) {
+Result EvalAst(AstNode *node, Parser *p) {
   switch (node->type) {
-
   case NODE_RETURN: {
-    Result *res = EvalAst(node->expr, p);
-    res->isReturn = 1;
+    Result res = EvalAst(node->expr, p);
+    res.isReturn = 1;
     return res;
   }
 
   case NODE_NUMBER: {
-    Result *res = newResult(&node->number, NODE_NUMBER, sizeof(node->number));
+    Result res = newResult(&node->number, NODE_NUMBER);
     return res;
   }
 
@@ -398,19 +353,19 @@ Result *EvalAst(AstNode *node, Parser *p) {
   }
 
   case NODE_FUNCTION_CALL: {
+
     SymbolTableEntry *sym =
         lookupSymbol(p->ctx, node->function.call.name, SYMBOL_KIND_FUNCTION);
+
     if (!sym) {
       printEvalError(node->loc, "undeclared function %s was called\n",
                      node->function.call.name);
       exit(EXIT_FAILURE);
     }
     // update the func symbol table params with the value of args
-    p->level++;
 
-    enterScope(p->ctx);
     for (int i = 0; i < node->function.call.argsCount; i++) {
-      Result *res = EvalAst(node->function.call.args[i], p);
+      Result res = EvalAst(node->function.call.args[i], p);
 
       char *paramType = sym->function.params[i]->type;
 
@@ -419,12 +374,13 @@ Result *EvalAst(AstNode *node, Parser *p) {
                        paramType, getDataType(res));
         exit(EXIT_FAILURE);
       }
-      updateParamWithArgs(sym, i, res);
-      freeResult(res);
+      updateParamWithArgs(sym, i, &res);
+      freeResult(&res);
     }
-    Result *value = EvalAst(sym->function.body, p);
 
-    if (sym->type && (value == NULL)) {
+    Result value = EvalAst(sym->function.body, p);
+
+    if (sym->type && (value.NodeType == NODE_NONE)) {
       printEvalError(node->loc, "expected return type to be %s but got void\n",
                      sym->type);
       exit(EXIT_FAILURE);
@@ -438,94 +394,111 @@ Result *EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
 
-    exitScope(p->ctx);
-    p->level--;
-
     return value;
   }
 
   case NODE_BINARY_OP: {
+    Result left = EvalAst(node->binaryOp.left, p);
+    Result right = EvalAst(node->binaryOp.right, p);
 
-    Result *left = EvalAst(node->binaryOp.left, p);
-    Result *right = EvalAst(node->binaryOp.right, p);
-
-    if (!left || !right) {
+    if (left.NodeType == NODE_NONE || right.NodeType == NODE_NONE) {
       printEvalError(node->loc, "Error: Null result encountered\n");
       exit(EXIT_FAILURE);
     }
 
-    Result *res = NULL;
-    if (left->NodeType == NODE_NUMBER && right->NodeType == NODE_NUMBER) {
-      double leftVal = *(double *)(left->result);
-      double rightVal = *(double *)(right->result);
+    Result res = {0};
 
-      free(left);
-      free(right);
+    if (left.NodeType == NODE_NUMBER && right.NodeType == NODE_NUMBER) {
+      double leftVal = *(double *)(left.result);
+      double rightVal = *(double *)(right.result);
+
+      // Allocate memory dynamically for the result
+      double *val = malloc(sizeof(double));
+      if (val == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+      }
+
       switch (node->binaryOp.op) {
-      case TOKEN_PLUS:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal + rightVal;
+      case TOKEN_PLUS: {
+        *val = leftVal + rightVal;
+        res = newResult(val, NODE_NUMBER); // Pass dynamically allocated memory
         break;
-      case TOKEN_MINUS:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal - rightVal;
+      }
+      case TOKEN_MINUS: {
+        *val = leftVal - rightVal;
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_MODULO:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = (int)leftVal % (int)rightVal;
+      }
+      case TOKEN_MODULO: {
+        *val = (int)leftVal % (int)rightVal;
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_MULTIPLY:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal * rightVal;
+      }
+      case TOKEN_MULTIPLY: {
+        *val = leftVal * rightVal;
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_DIVIDE:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal / rightVal;
+      }
+      case TOKEN_DIVIDE: {
+        *val = leftVal / rightVal;
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_DB_EQUAL:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal == rightVal;
+      }
+      case TOKEN_DB_EQUAL: {
+        *val = (double)(leftVal == rightVal);
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_EQ_GREATER:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal >= rightVal;
+      }
+      case TOKEN_EQ_GREATER: {
+        *val = (double)(leftVal >= rightVal);
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_EQ_LESSER:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal <= rightVal;
+      }
+      case TOKEN_EQ_LESSER: {
+        *val = (double)(leftVal <= rightVal);
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_LESSER:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal < rightVal;
+      }
+      case TOKEN_LESSER: {
+        *val = (double)(leftVal < rightVal);
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_GREATER:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal > rightVal;
+      }
+      case TOKEN_GREATER: {
+        *val = (double)(leftVal > rightVal);
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_EQ_NOT:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = leftVal != rightVal;
+      }
+      case TOKEN_EQ_NOT: {
+        *val = (double)(leftVal != rightVal);
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_AND:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = (leftVal && rightVal);
+      }
+      case TOKEN_AND: {
+        *val = (double)(leftVal && rightVal);
+        res = newResult(val, NODE_NUMBER);
         break;
-      case TOKEN_OR:
-        res = newResult(malloc(sizeof(double)), NODE_NUMBER, sizeof(double));
-        *(double *)(res->result) = (leftVal || rightVal);
+      }
+      case TOKEN_OR: {
+        *val = (double)(leftVal || rightVal);
+        res = newResult(val, NODE_NUMBER);
         break;
+      }
       default:
         printEvalError(node->loc, "Error: Unknown binary operator\n");
         exit(EXIT_FAILURE);
       }
 
-      // Free the results used
-
+      // Free the results used, as needed
+      freeResult(&left);
+      freeResult(&right);
+      res.isAllocated = 1;
       return res;
-    } else if (left->NodeType == NODE_STRING_LITERAL &&
-               right->NodeType == NODE_STRING_LITERAL) {
-      char *leftStr = trimQuotes((char *)left->result);
-      char *rightStr = trimQuotes((char *)right->result);
+    } else if (left.NodeType == NODE_STRING_LITERAL &&
+               right.NodeType == NODE_STRING_LITERAL) {
+      char *leftStr = trimQuotes((char *)left.result);
+      char *rightStr = trimQuotes((char *)right.result);
 
       size_t len1 = strlen(leftStr);
       size_t len2 = strlen(rightStr);
@@ -539,28 +512,27 @@ Result *EvalAst(AstNode *node, Parser *p) {
       strcpy(concatenated, leftStr);
       strcat(concatenated, rightStr);
 
-      freeResult(left);  // Assuming leftStr and rightStr were allocated
-      freeResult(right); // Assuming rightStr was allocated from
+      freeResult(&left); // Free left and right strings after use
+      freeResult(&right);
 
-      return newResult(concatenated, NODE_STRING_LITERAL, len1 + len2 + 1);
+      return newResult(
+          concatenated,
+          NODE_STRING_LITERAL); // Pass dynamically allocated memory
     } else {
       printEvalError(
-          node->loc, "Error: cannot do ( %s ) operations between %s and%s \n ",
+          node->loc, "Error: cannot do ( %s ) operations between %s and %s\n",
           tokenNames[node->binaryOp.op], getDataType(left), getDataType(right));
       exit(EXIT_FAILURE);
     }
   }
 
   case NODE_UNARY_OP: {
-    Result *right = EvalAst(node->unaryOp.right, p);
-    if (right->NodeType == NODE_NUMBER) {
-      double rightVal = *(double *)(right->result);
+    Result right = EvalAst(node->unaryOp.right, p);
+    if (right.NodeType == NODE_NUMBER) {
+      double rightVal = *(double *)(right.result);
       switch (node->unaryOp.op) {
       case TOKEN_NOT: {
-        Result *node =
-            newResult(&(double){!rightVal}, NODE_NUMBER, sizeof(double));
-        free(right->result);
-        free(right);
+        Result node = newResult(&(double){!rightVal}, NODE_NUMBER);
         return node;
       }
       default:
@@ -584,10 +556,14 @@ Result *EvalAst(AstNode *node, Parser *p) {
     }
 
     if (strcmp(var->type, "string") == 0) {
-      return newResult((char *)var->value, NODE_STRING_LITERAL,
-                       sizeof(var->value));
+
+      Result res = newResult((char *)var->value, NODE_STRING_LITERAL);
+      freeEntry(var);
+      return res;
     }
-    return newResult(var->value, NODE_NUMBER, sizeof(var->value));
+    Result res = newResult(var->value, NODE_NUMBER);
+    freeEntry(var);
+    return res;
   }
 
   case NODE_IDENTIFIER_MUTATION: {
@@ -598,24 +574,24 @@ Result *EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
 
-    Result *res = EvalAst(node->identifier.value, p);
+    Result res = EvalAst(node->identifier.value, p);
 
     char *type = getDataType(res);
 
     if (strcmp(type, var->type) != 0) {
       printEvalError(node->loc, "cannot assign type of %s to type of %s", type,
                      var->type);
-      freeResult(res);
+      freeResult(&res);
       exit(EXIT_FAILURE);
     }
 
-    SymbolError err = updateSymbolTableValue(var, res);
-    free(res);
+    SymbolError err = updateSymbolTableValue(var, &res);
     if (err != SYMBOL_ERROR_NONE) {
       printSymbolError(err, node->loc, node->identifier.name,
                        node->identifier.type);
       exit(EXIT_FAILURE);
     }
+
     break;
   }
 
@@ -624,28 +600,27 @@ Result *EvalAst(AstNode *node, Parser *p) {
     SymbolTableEntry *var =
         lookupSymbol(p->ctx, node->identifier.name, SYMBOL_KIND_VARIABLES);
 
-    if (var) {
+    if (var && !var->isParam) {
       printEvalError(node->loc, "cannot redeclare %s\n", node->identifier.name);
       exit(EXIT_FAILURE);
     }
 
-    Result *res = EvalAst(node->identifier.value, p);
+    Result res = EvalAst(node->identifier.value, p);
 
     char *inferedDataType = getDataType(res);
 
     if (strcmp(node->identifier.type, inferedDataType) != 0) {
       printEvalError(node->loc, "cannot assign typeof %s to %s\n",
                      inferedDataType, node->identifier.type);
-      free(res->result);
-      free(res);
+      free(res.result);
       exit(EXIT_FAILURE);
     }
 
     SymbolError err =
-        insertSymbol(p->ctx, node->identifier.type, node->identifier.name, res,
+        insertSymbol(p->ctx, node->identifier.type, node->identifier.name, &res,
                      SYMBOL_KIND_VARIABLES, p->level);
+
     if (err != SYMBOL_ERROR_NONE) {
-      printf("%s\n", errorName[err]);
       printSymbolError(err, node->loc, node->identifier.name, inferedDataType);
     }
     break;
@@ -676,8 +651,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
   case NODE_STRING_LITERAL: {
     char *str = strdup(node->stringLiteral.value);
-    Result *res = newResult(str, NODE_STRING_LITERAL, strlen(str) + 1);
-    free(str);
+    Result res = newResult(str, NODE_STRING_LITERAL);
     return res;
   }
 
@@ -687,28 +661,27 @@ Result *EvalAst(AstNode *node, Parser *p) {
     for (int i = 0; i < node->block.statementCount; i++) {
       AstNode *ast = node->block.statements[i];
 
-      Result *result = EvalAst(ast, p);
+      Result result = EvalAst(ast, p);
 
-      if (result && (result->isReturn || result->isBreak)) {
-        p->level--;
+      if (result.NodeType != NODE_NONE && (result.isReturn || result.isBreak)) {
         exitScope(p->ctx);
+        p->level--;
         return result;
-      } else if (result &&
-                 (ast->type == NODE_FUNCTION_READ_IN || result->isContinue)) {
+      } else if (result.NodeType != NODE_NONE &&
+                 (ast->type == NODE_FUNCTION_READ_IN || result.isContinue)) {
         return result;
       }
 
-      freeResult(result);
+      freeResult(&result);
     };
     exitScope(p->ctx);
     p->level--;
-
-    return NULL;
+    break;
   }
 
   case NODE_IF_ELSE: {
-    Result *conditionResult = EvalAst(node->ifElseBlock.condition, p);
-    if (conditionResult->NodeType != NODE_NUMBER) {
+    Result conditionResult = EvalAst(node->ifElseBlock.condition, p);
+    if (conditionResult.NodeType != NODE_NUMBER) {
       printEvalError(
           node->loc,
           "Error: Condition in if-else must be a number (interpreted as "
@@ -716,18 +689,18 @@ Result *EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
 
-    double conditionValue = *(double *)(conditionResult->result);
+    double conditionValue = *(double *)(conditionResult.result);
 
-    freeResult(conditionResult);
+    freeResult(&conditionResult);
 
     if (conditionValue) {
-      Result *val = EvalAst(node->ifElseBlock.ifBlock, p);
-      if (val) {
+      Result val = EvalAst(node->ifElseBlock.ifBlock, p);
+      if (val.NodeType != NODE_NONE) {
         return val;
       }
     } else if (node->ifElseBlock.elseBlock != NULL) {
-      Result *val = EvalAst(node->ifElseBlock.elseBlock, p);
-      if (val) {
+      Result val = EvalAst(node->ifElseBlock.elseBlock, p);
+      if (val.NodeType != NODE_NONE) {
         return val;
       }
     }
@@ -767,11 +740,10 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
     buffer[currentBufferSize] = '\0';
 
-    Result *res = NULL;
+    Result res = {0};
 
     if (strcmp(node->read.type, "string") == 0) {
-      res = newResult(buffer, NODE_STRING_LITERAL,
-                      currentBufferSize + 1); // Include null terminator
+      res = newResult(buffer, NODE_STRING_LITERAL); // Include null terminator
     } else if (strcmp(node->read.type, "number") == 0) {
       double numberValue;
       sscanf(buffer, "%lf", &numberValue);
@@ -783,10 +755,9 @@ Result *EvalAst(AstNode *node, Parser *p) {
         exit(EXIT_FAILURE);
       }
       *ptr = numberValue;
-      res = newResult((void *)ptr, NODE_NUMBER, sizeof(double));
+      res = newResult((void *)ptr, NODE_NUMBER);
     }
 
-    free(buffer);
     return res;
   }
 
@@ -796,6 +767,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
       AstNode *stmt = node->print.statments[i];
       switch (stmt->type) {
       case NODE_IDENTIFIER_VALUE: {
+
         SymbolTableEntry *entry =
             lookupSymbol(p->ctx, stmt->identifier.name, SYMBOL_KIND_VARIABLES);
 
@@ -810,33 +782,31 @@ Result *EvalAst(AstNode *node, Parser *p) {
           break;
         }
 
-        Result *res = EvalAst(stmt, p);
-        printResult(res);
+        Result res = EvalAst(stmt, p);
+        printResult(&res);
         freeEntry(entry);
-        freeResult(res);
         break;
       }
 
       case NODE_STRING_LITERAL: {
-        Result *res = EvalAst(stmt, p);
-        printResult(res);
-        freeResult(res);
+        Result res = EvalAst(stmt, p);
+        printResult(&res);
+        freeResult(&res);
         break;
       }
 
       case NODE_NUMBER: {
-        Result *res = EvalAst(stmt, p);
-        printResult(res);
-        freeResult(res);
+        Result res = EvalAst(stmt, p);
+        printResult(&res);
         break;
       }
 
       case NODE_ARRAY_ELEMENT_ACCESS: {
-        Result *res = EvalAst(stmt, p);
-        if (res->NodeType == NODE_STRING_LITERAL) {
-          printf(YELLOW "%s" RESET, trimQuotes((char *)res->result));
+        Result res = EvalAst(stmt, p);
+        if (res.NodeType == NODE_STRING_LITERAL) {
+          printf(YELLOW "%s" RESET, trimQuotes((char *)res.result));
         } else {
-          printf(MAGENTA "%0.lf" RESET, *(double *)res->result);
+          printf(MAGENTA "%0.lf" RESET, *(double *)res.result);
         }
         break;
       }
@@ -856,14 +826,13 @@ Result *EvalAst(AstNode *node, Parser *p) {
       printEvalError(node->loc, " %s is not decleared\n", node->arrayElm.name);
       exit(EXIT_FAILURE);
     }
-    Result *res = EvalAst(node->arrayElm.index, p);
-    if (!res) {
+    Result res = EvalAst(node->arrayElm.index, p);
+    if (res.NodeType == NODE_NONE) {
       printEvalError(node->loc, "invalid index");
       exit(EXIT_FAILURE);
     }
-    double idx = *(double *)res->result;
+    double idx = *(double *)res.result;
     int index = (int)idx;
-    free(res);
     if (index >= var->arraySize) {
       printEvalError(node->loc,
                      "index out of bound. index 0 cannot be accessed", index);
@@ -872,10 +841,10 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
     if (strcmp(var->type, "string") == 0) {
       char *value = ((char **)var->value)[index];
-      return newResult(value, NODE_STRING_LITERAL, 0);
+      return newResult(value, NODE_STRING_LITERAL);
     } else {
       double value = ((double *)var->value)[index];
-      return newResult(&value, NODE_NUMBER, 0);
+      return newResult(&value, NODE_NUMBER);
     }
   }
 
@@ -911,7 +880,7 @@ Result *EvalAst(AstNode *node, Parser *p) {
 
     if (node->array.arraySize) {
       Result *result = EvalAst(node->array.arraySize, p);
-      double size = *(double *)result->result;
+      double size = *(double *)result.result;
       if (strcmp(node->array.type, "string") == 0) {
         insertStrArraySymbol(p->table, node->array.name, node->array.type,
   size, NULL, node->array.isFixed, node->array.actualSize); } else {
@@ -945,15 +914,14 @@ Result *EvalAst(AstNode *node, Parser *p) {
       exit(EXIT_FAILURE);
     }
 
-    Result *res = EvalAst(node->arrayElm.index, p);
-    double resIndex = *(double *)res->result;
+    Result res = EvalAst(node->arrayElm.index, p);
+    double resIndex = *(double *)res.result;
     int index = (int)resIndex;
 
     // checks and handles bound of array if fixed else increases the arr size
     if (var->isFixed) {
       handleBound(node, var, index);
     }
-    free(res); // freeing the previous result of index
 
     res = EvalAst(node->arrayElm.value, p);
     char *type = getDataType(res);
@@ -968,13 +936,12 @@ Result *EvalAst(AstNode *node, Parser *p) {
       if (!var->value) {
         var->value = (char **)malloc(sizeof(char *) * var->arraySize);
       }
-      ((char **)var->value)[index] = strdup((char *)res->result);
+      ((char **)var->value)[index] = strdup((char *)res.result);
 
       if (!var->isFixed) {
         var->arraySize++;
       }
-      free(res->result);
-      free(res);
+      free(res.result);
       break;
     }
 
@@ -982,66 +949,65 @@ Result *EvalAst(AstNode *node, Parser *p) {
       var->value = (double *)malloc(sizeof(double) * var->arraySize);
     }
 
-    ((double *)var->value)[index] = *(double *)res->result;
+    ((double *)var->value)[index] = *(double *)res.result;
     if (!var->isFixed) {
       var->arraySize++;
     }
-    free(res);
 
     break;
   }
 
   case NODE_BREAK: {
-    Result *res = newResult(NULL, NODE_BREAK, 0);
-    res->isBreak = 1;
+    Result res = newResult(NULL, NODE_BREAK);
+    res.isBreak = 1;
     return res;
   }
 
   case NODE_CONTNUE: {
-    Result *res = newResult(NULL, NODE_CONTNUE, 0);
-    res->isContinue = 1;
+    Result res = newResult(NULL, NODE_CONTNUE);
+    res.isContinue = 1;
     return res;
   }
 
   case NODE_WHILE_LOOP: {
     p->level++;
     enterScope(p->ctx);
-    Result *result = EvalAst(node->whileLoop.condition, p);
+    Result result = EvalAst(node->whileLoop.condition, p);
     double condition = 0;
-    if (result) { // Check if result is non-null
-      if (result->result) {
-        condition = *(double *)result->result;
+    if (result.NodeType != NODE_NONE) { // Check if result is non-null
+      if (result.result) {
+        condition = *(double *)result.result;
       }
-      free(result->result); // Free the dynamically allocated memory pointed to
-      // by result->result, if applicable
-      free(result); // Free the Result structure itself
+      free(result.result); // Free the dynamically allocated memory pointed to
+      // by result.result, if applicable
     };
 
     while (condition) {
-      Result *blockRes = EvalAst(node->whileLoop.body, p);
+      Result blockRes = EvalAst(node->whileLoop.body, p);
 
-      if (blockRes && blockRes->isReturn) {
+      if (blockRes.NodeType != NODE_NONE && blockRes.isReturn) {
         return blockRes;
       }
 
-      if (blockRes && blockRes->isContinue) {
-        freeResult(blockRes);
+      if (blockRes.NodeType && blockRes.isContinue) {
+        freeResult(&blockRes);
         result = EvalAst(node->whileLoop.condition, p);
-        condition = *(double *)result->result;
-        free(result);
+        condition = *(double *)result.result;
+        freeResult(&result);
         continue;
       }
 
       // Handle break: exit the loop
-      if (blockRes && blockRes->isBreak) {
-        freeResult(blockRes);
+      if (blockRes.NodeType != NODE_NONE && blockRes.isBreak) {
+        freeResult(&blockRes);
         break;
       }
 
-      freeResult(blockRes);
+      freeResult(&blockRes);
+
       blockRes = EvalAst(node->whileLoop.condition, p);
-      condition = *(double *)blockRes->result;
-      freeResult(blockRes);
+      condition = *(double *)blockRes.result;
+      freeResult(&blockRes);
     }
     exitScope(p->ctx);
     p->level--;
@@ -1053,44 +1019,41 @@ Result *EvalAst(AstNode *node, Parser *p) {
     enterScope(p->ctx);
     EvalAst(node->loopFor.initializer, p);
 
-    Result *result = EvalAst(node->loopFor.condition, p);
-    double condition = *(double *)result->result;
-    freeResult(result);
+    Result result = EvalAst(node->loopFor.condition, p);
+    double condition = *(double *)result.result;
+
+    free(result.result); // result.result  is a allocted pointer
 
     while (condition) {
       // evaluates the body
-      Result *blockRes = EvalAst(node->loopFor.loopBody, p);
+      Result blockRes = EvalAst(node->loopFor.loopBody, p);
 
-      if (blockRes && blockRes->isReturn) {
+      if (blockRes.NodeType && blockRes.isReturn) {
         return blockRes;
       }
 
       // free  the result if result is valid and is not a type of return
-      if (blockRes && blockRes->isContinue) {
-        freeResult(blockRes);
+      if (blockRes.NodeType && blockRes.isContinue) {
         EvalAst(node->loopFor.icrDcr, p);
 
-        Result *newResult = EvalAst(node->loopFor.condition, p);
-        condition = *(double *)newResult->result;
-        freeResult(newResult);
+        Result newResult = EvalAst(node->loopFor.condition, p);
+        condition = *(double *)newResult.result;
+        free(newResult.result);
         continue; // Skip the rest of the loop body
       }
 
       // Handle break: exit the loop
-      if (blockRes && blockRes->isBreak) {
-        freeResult(blockRes);
+      if (blockRes.NodeType && blockRes.isBreak) {
         exitScope(p->ctx);
         break; // Exit the loop
       }
-      // free the previous result of the body
-      freeResult(blockRes);
 
       // handle the icrDcr statement
-      EvalAst(node->loopFor.icrDcr, p);
-
-      Result *newResult = EvalAst(node->loopFor.condition, p);
-      condition = *(double *)newResult->result;
-      freeResult(newResult);
+      Result res = EvalAst(node->loopFor.icrDcr, p);
+      Result newResult = EvalAst(node->loopFor.condition, p);
+      condition = *(double *)newResult.result;
+      freeResult(&newResult);
+      freeResult(&res);
     }
     exitScope(p->ctx);
     p->level--;
@@ -1103,11 +1066,11 @@ Result *EvalAst(AstNode *node, Parser *p) {
     exit(EXIT_FAILURE);
   }
 
-  return NULL; // Ensure you return a valid pointer
+  return newResult(NULL, NODE_NONE); // Ensure you return a valid pointer
 }
 
 void freeAst(AstNode *node) {
-  if (!node) {
+  if (node == NULL) {
     return;
   }
 
@@ -1140,6 +1103,7 @@ void freeAst(AstNode *node) {
     }
     break;
   case NODE_FOR_LOOP: {
+
     if (node->loopFor.loopBody) {
       freeAst(node->loopFor.loopBody);
     }
@@ -1178,17 +1142,6 @@ void freeAst(AstNode *node) {
       node->function.defination.body = NULL;
     }
 
-    for (int i = 0; i < node->function.defination.paramsCount; i++) {
-      if (node->function.defination.params[i]) {
-        FuncParams *params = node->function.defination.params[i];
-        free(params->name);
-        free(params->type);
-        if (params->value) {
-          free(params->value);
-        }
-        free(params);
-      }
-    }
     free(node->function.defination.params);
 
     break;
@@ -1203,6 +1156,7 @@ void freeAst(AstNode *node) {
       node->stringLiteral.value = NULL;
     }
     break;
+
   case NODE_BLOCK: {
     for (int i = 0; i < node->block.statementCount; i++) {
       if (node->block.statements[i]) {
@@ -1331,6 +1285,13 @@ void freeAst(AstNode *node) {
     if (node->function.call.args) {
       free(node->function.call.args);
       node->function.call.args = NULL;
+    }
+
+    break;
+
+  case NODE_FUNCTION_READ_IN:
+    if (node->read.type) {
+      free(node->read.type);
     }
     break;
   }

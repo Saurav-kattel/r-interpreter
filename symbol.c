@@ -4,7 +4,7 @@
 #include "interpreter.h"
 #include "parser.h"
 
-#include <linux/limits.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,7 +67,37 @@ void freeFnSymbol(SymbolTableEntry *entry) {
   free(entry->function.params);
 }
 
+void printStack(SymbolContext *ctx) {
+  for (int i = 0; i < ctx->stack->frameCount; i++) {
+    StackFrame *frame = ctx->stack->frames[i];
+    SymbolTable *table = frame->localTable;
+    printf("\nLocal Scope Frame %d\n", i);
+    printf("---------------------------------------------------------\n");
+    for (int j = 0; j < table->size; j++) {
+      printf(" %s", table->entries[j]->symbol);
+      if (table->entries[j]->isFn) {
+        printf("  %d\n", table->entries[j]->function.parameterCount);
+      }
+    }
+  }
+  printf("\n\n");
+}
+
+void printGblTable(SymbolContext *ctx) {
+  SymbolTable *table = ctx->globalTable;
+  printf("\nGbl Scope\n");
+  printf("---------------------------------------------------------\n");
+  for (int j = 0; j < table->size; j++) {
+    printf("Gbl-> %s ", table->entries[j]->symbol);
+    if (table->entries[j]->isFn) {
+      printf("  %d\n", table->entries[j]->function.parameterCount);
+    }
+  }
+  printf("\n\n");
+}
+
 void exitScope(SymbolContext *ctx) {
+
   StackFrame *frame = ctx->stack->frames[ctx->stack->frameCount - 1];
   if (!frame) {
     return;
@@ -95,10 +125,9 @@ void exitScope(SymbolContext *ctx) {
     }
 
     if (entry->isFn) {
-      freeSymbolArray(entry);
+      freeFnSymbol(entry);
     }
 
-    free(entry->value);
     free(entry->type);
     free(entry);
   }
@@ -109,6 +138,7 @@ void exitScope(SymbolContext *ctx) {
 }
 
 void enterScope(SymbolContext *ctx) {
+
   int frameCount = ctx->stack->frameCount;
   int capacity = ctx->stack->capacity;
 
@@ -129,12 +159,14 @@ void enterScope(SymbolContext *ctx) {
   // Increment frame count since we've entered a new scope
   ctx->stack->frameCount++;
 }
+
 SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
                                    SymbolKind kind) {
   for (int j = 0; j < scope->size; j++) {
 
     SymbolTableEntry *entry = scope->entries[j];
     if (strcmp(entry->symbol, name) == 0) {
+
       switch (kind) {
       case SYMBOL_KIND_FUNCTION:
         if (entry->isFn) {
@@ -151,7 +183,7 @@ SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
 
     // If we are looking for a variable, it could be a function parameter.
     if (entry->isFn && entry->function.parameterCount > 0) {
-      // Check for parameters in the function's parameter list
+      // Check for parametersi am in fire in the function's parameter list
       for (int k = 0; k < entry->function.parameterCount; k++) {
         FuncParams *param = entry->function.params[k];
         if (strcmp(param->name, name) == 0) {
@@ -161,7 +193,8 @@ SymbolTableEntry *lookupLocalScope(SymbolTable *scope, char *name,
           paramEntry->type = param->type;
           paramEntry->value = param->value;
           paramEntry->isArray = param->isArray;
-          paramEntry->isFn = param->isFunc;
+          paramEntry->isFn = false;
+          paramEntry->isParam = true;
           return paramEntry; // Return the entry for the parameter
         }
       }
@@ -219,7 +252,6 @@ SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
     SymbolTableEntry *entry = lookupLocalScope(localScope, name, kind);
 
     if (entry) {
-
       return entry;
     }
   }
@@ -229,7 +261,6 @@ SymbolTableEntry *lookupSymbol(SymbolContext *context, char *name,
 
 SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
                               Result *value, SymbolKind kind, int level) {
-  printf("fcount %d\n", ctx->stack->frameCount);
   // Check if the symbol already exists
   SymbolTableEntry *entry = lookupSymbol(ctx, name, kind);
   if (entry) {
@@ -326,10 +357,8 @@ SymbolError insertLocalSymbol(SymbolContext *ctx, char *type, char *name,
   if (strcmp(type, "string") == 0) {
     locTable->entries[locTable->size]->value = strdup((char *)value->result);
     free(value->result); // Free the result as the value is now copied
-    free(value);         // Free the Result structure
   } else if (strcmp(type, "number") == 0) {
     locTable->entries[locTable->size]->value = (double *)value->result;
-    free(value); // Free the Result structure
   }
 
   // Increment the size of the local table
@@ -344,6 +373,7 @@ SymbolError insertGlobalSymbol(SymbolContext *ctx, char *type, char *name,
   SymbolTableEntry *entry = lookupSymbol(ctx, name, kind);
 
   if (entry) {
+
     return SYMBOL_DUPLICATE_ERROR;
   }
 
@@ -375,11 +405,9 @@ SymbolError insertGlobalSymbol(SymbolContext *ctx, char *type, char *name,
   if (strcmp(type, "string") == 0) {
     ctx->globalTable->entries[size]->value = strdup((char *)value->result);
     free(value->result);
-    free(value);
   }
   if (strcmp(type, "number") == 0) {
     ctx->globalTable->entries[size]->value = (double *)value->result;
-    free(value);
   }
   ctx->globalTable->size++;
   return SYMBOL_ERROR_NONE;
@@ -505,7 +533,7 @@ SymbolError insertFunctionSymbol(SymbolContext *ctx, char *name, char *type,
   }
 
   // Insertion into global or local stack based on the level
-  if (level > 0) {
+  if (level <= 0) {
     int status = insertFunction(ctx->globalTable, name, type, paramCount,
                                 params, body, kind);
     return status;
@@ -536,15 +564,21 @@ SymbolError updateSymbolTableValue(SymbolTableEntry *entry, Result *value) {
     if (entry->value) {
       free(entry->value);
     }
+
     entry->value = strdup((char *)value->result);
+    entry->isAllocated = value->isAllocated;
+    free(value->result);
     break;
   }
   case NODE_NUMBER:
     if (strcmp(entry->type, "number") != 0) {
       return SYMBOL_TYPE_ERROR;
     }
-
+    if (entry->isAllocated) {
+      free(entry->value);
+    }
     entry->value = (double *)value->result;
+    entry->isAllocated = value->isAllocated;
     break;
   }
   return SYMBOL_ERROR_NONE;

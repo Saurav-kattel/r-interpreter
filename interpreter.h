@@ -4,7 +4,7 @@
 #include "common.h"
 #include "parser.h"
 #include "symbol.h"
-Result *EvalAst(AstNode *, Parser *);
+Result EvalAst(AstNode *, Parser *);
 void freeAst(AstNode *);
 AstNode *parseAst(Parser *p);
 void printSymbolTable(SymbolTable *);
